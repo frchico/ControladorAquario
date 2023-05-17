@@ -19,16 +19,19 @@ Espalexa espalexa;
 
 
 
+#include <ServoEasing.hpp>
+
 #include <Servo.h>
 
 
 
-#define PIN_SERVO D4
 
-#include <SimpleTimer.h>
-SimpleTimer timer;
+ServoEasing servo;
+#define START_DEGREE_VALUE  0
+#define SERVO1_PIN  D4
+#define DISABLE_COMPLEX_FUNCTIONS     // Activating this disables the SINE, CIRCULAR, BACK, ELASTIC, BOUNCE and PRECISION easings. Saves up to 1850 bytes program memory.
+#define MAX_EASING_SERVOS 1
 
-Servo servo;
 AsyncWebServer server(80);
 DNSServer dns;
 ESPDash dashboard(&server);
@@ -45,11 +48,34 @@ Card coolerButton(&dashboard, BUTTON_CARD, "Resfriamento");
 bool estaAlimentando = false;
 
 
+enum StatusAlimentacao {
+	Parado = 0,
+	Alimentando,
+	Retornando,
+	AlimentacaoConcluida
+} statusAlimentacao;
+
+
+int posGavetaAberta = 0;
+int posGavetaFechada = 90;
+
 //callback functions
 void firstLightChanged(uint8_t brightness);
 void setupAlimentadorPeixe(int SERVO_PIN);
 void alimentarPeixes();
 
+unsigned long startMillis0;
+unsigned currentMillis;
+const unsigned long period = 1000;
+
+void Serialprintln(String s){
+	currentMillis = millis();
+	if (currentMillis - startMillis0 <= period) {
+		Serial.println(s);
+		startMillis0 = millis();
+
+	}
+}
 void setup() {
     // WiFi.mode(WIFI_STA); // explicitly set mode, esp defaults to STA+AP
     // it is a good practice to make sure your code sets wifi mode how you want it.
@@ -88,21 +114,18 @@ void setup() {
 		
 	
 
-		setupAlimentadorPeixe(PIN_SERVO);
+		setupAlimentadorPeixe(SERVO1_PIN);
 		
-		feedButton.update(true);
-
+		feedButton.update(false);
 
 		feedButton.attachCallback([&](int value){
 			Serial.println("[Card1] Button Callback Triggered: "+String((value == 1)?"true":"false"));
+			if ( value == 1 && statusAlimentacao == StatusAlimentacao::Parado ){
+				Serial.println("Botao clicado");
+				statusAlimentacao = StatusAlimentacao::Alimentando;
+			}
 			feedButton.update(value);
 			dashboard.sendUpdates();
-			if ( value == 1 ){
-				estaAlimentando = true;
-				alimentarPeixes();
-				feedButton.update(false);
-				dashboard.sendUpdates();
-			}
 		});
 
 
@@ -130,17 +153,19 @@ void setup() {
 void loop() {
 	temperature.update((int)random(0, 50));
 	humidity.update((int)random(0, 100));
-	timer.run();
-
+	
+	//feedButton.update(statusAlimentacao != StatusAlimentacao::Parado);
 	/* Send Updates to our Dashboard (realtime) */
 	dashboard.sendUpdates();
 	espalexa.loop();
+
+	alimentarPeixes();
    
 	/* 
 	Delay is just for demonstration purposes in this example,
 	Replace this code with 'millis interval' in your final project.
 	*/
-delay(100);
+	//delay(100);
 	// put your main code here, to run repeatedly:   
 }
 
@@ -163,50 +188,60 @@ void firstLightChanged(uint8_t brightness) {
     }
 }
 
+
+//StatusAlimentacao statusAlimentacao = StatusAlimentacao::Parado; // 0 - parado; 1 - alimentando; 2 - retornando alimentacao;
 void alimentarPeixes(){
+	switch (statusAlimentacao)
+	{
+		case StatusAlimentacao::Parado: {
+			if(servo.attached()){
+				servo.detach();
+				Serial.println("Servo desconectado...");
+			}
+			feedButton.update(false);
+			dashboard.sendUpdates(true);
+			break;
+		}
+		case StatusAlimentacao::Alimentando: { //1 - alimentando
+			if(!servo.attached()){
+				if (servo.attach(SERVO1_PIN, posGavetaFechada) == INVALID_SERVO) {
+					Serial.println("Erro ao conectar a servo...");
+					statusAlimentacao = StatusAlimentacao::Parado;
+					return;
+				}
+			}
+			feedButton.update(true);
+			dashboard.sendUpdates(true);
+			Serial.println("Angulo 1 = " + servo.getCurrentAngle());
 
-		int tempo = 2000;
-		timer.setTimeout(tempo, []{
-			if ( ! servo.attached() ){
-				servo.attach(PIN_SERVO);
-		}});
-
-		Serial.println("alimentarPeixes");
-		timer.setTimeout(tempo+=2, []{
-			servo.write(0); 
-			Serial.println("Pos  = 0");
-		});
-
-		// ITimer.setInterval(500, []{Serial.println(90);});
-		// ITimer.setInterval(500, []{Serial.println(180);});
-		// ITimer.setInterval(500, []{Serial.println(0);});
-		timer.setTimeout(tempo*=2, []{
-			servo.write(90); 
-			Serial.println("Pos  = 90");
-		});
-		timer.setTimeout(tempo*=2, []{
-			servo.write(180); 
-			Serial.println("Pos  = 180");
-		});
-		timer.setTimeout(tempo*=2, []{
-			servo.write(90); 
-			Serial.println("Pos  = 90");
-		});
-		timer.setTimeout(tempo*=2, []{
-			servo.write(0); 
-			Serial.println("Pos  = 0");
-		});
-		timer.setTimeout(tempo*=2, []{
-			if ( servo.attached() ){
-			servo.detach();
-		}});
-		
-
-	
-
-	
+			servo.startEaseToD(posGavetaAberta, 1000);
+			Serial.println("Servo Alimentando...");
+			statusAlimentacao = StatusAlimentacao::Retornando;
+		}
+		case StatusAlimentacao::Retornando: {
+			//Serialprintln("Servo Retornando...");
+			if ( ! servo.isMoving() ) {
+				Serial.print("Angulo 2 = " );
+				Serial.println( servo.getCurrentAngle());
+				Serial.println("Servo Retornando...");
+				servo.startEaseToD(posGavetaFechada, 1000);
+				statusAlimentacao = StatusAlimentacao::AlimentacaoConcluida;
+			}
+		}
+		case StatusAlimentacao::AlimentacaoConcluida: {
+			//Serialprintln("Servo AlimentacaoConcluida...");
+			if ( ! servo.isMoving()) {
+				Serial.println("Servo AlimentacaoConcluida...");
+				Serial.print("Angulo 3 = " );
+				Serial.println( servo.getCurrentAngle());
+				
+				statusAlimentacao = StatusAlimentacao::Parado;
+			}
+		}
+	}
 }
 void setupAlimentadorPeixe(int SERVO_PIN){
+	statusAlimentacao = StatusAlimentacao::Parado;
 	//servo.attach(SERVO_PIN);
 	//servo.write(0); // Inicia motor posição zero
 }
