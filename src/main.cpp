@@ -44,7 +44,8 @@ Card feedButton(&dashboard, BUTTON_CARD, "Alimentar");
 Card bombaDeArButton(&dashboard, BUTTON_CARD, "Bomba de ar");
 Card lampadaUVButton(&dashboard, BUTTON_CARD, "Lâmpada UV");
 Card coolerButton(&dashboard, BUTTON_CARD, "Resfriamento");
-
+Card servoMin(&dashboard, SLIDER_CARD, "Servo Min", "", -180, 180);
+Card servoMax(&dashboard, SLIDER_CARD, "Servo Max", "", -180, 180);
 bool estaAlimentando = false;
 
 
@@ -117,6 +118,8 @@ void setup() {
 		setupAlimentadorPeixe(SERVO1_PIN);
 		
 		feedButton.update(false);
+		servoMin.update(posGavetaAberta);
+		servoMax.update(posGavetaFechada);
 
 		feedButton.attachCallback([&](int value){
 			Serial.println("[Card1] Button Callback Triggered: "+String((value == 1)?"true":"false"));
@@ -126,6 +129,21 @@ void setup() {
 			}
 			feedButton.update(value);
 			dashboard.sendUpdates();
+		});
+
+		servoMin.attachCallback([&](int value){
+			Serial.println("[servoMin] Slider Callback Triggered: "+String(value));
+			servoMin.update(value);
+			posGavetaAberta = value;
+			dashboard.sendUpdates();
+
+		});
+		servoMax.attachCallback([&](int value){
+			Serial.println("[servoMax] Slider Callback Triggered: "+String(value));
+			servoMax.update(value);
+			posGavetaFechada = value;
+			dashboard.sendUpdates();
+
 		});
 
 
