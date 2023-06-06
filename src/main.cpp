@@ -1,5 +1,5 @@
-#define ESPALEXA_ASYNC //it is important to define this before #include <Espalexa.h>!
-#include <Espalexa.h>
+#include <Servo.h>
+
 
 #ifdef ARDUINO_ARCH_ESP32
 #include <WiFi.h>
@@ -10,82 +10,93 @@
 #endif
 #include <ESPAsyncWebServer.h>
 
-Espalexa espalexa;
 
 #include <ESPAsyncWiFiManager.h> 
 
-//#include <WiFiManager.h> // https://github.com/tzapu/WiFiManager
-#include <ESPDash.h>
-
-
-
-#include <ServoEasing.hpp>
-
-#include <Servo.h>
-
-
-
-
-ServoEasing servo;
-#define START_DEGREE_VALUE  0
-#define SERVO1_PIN  D4
-#define DISABLE_COMPLEX_FUNCTIONS     // Activating this disables the SINE, CIRCULAR, BACK, ELASTIC, BOUNCE and PRECISION easings. Saves up to 1850 bytes program memory.
-#define MAX_EASING_SERVOS 1
-
 AsyncWebServer server(80);
 DNSServer dns;
+
+#include <ESPDash.h>
 ESPDash dashboard(&server);
 
+#define ESPALEXA_ASYNC //it is important to define this before #include <Espalexa.h>!
+#include <Espalexa.h>
+Espalexa espalexa;
 
 
-Card temperature(&dashboard, TEMPERATURE_CARD, "Temperature", "°C");
-Card humidity(&dashboard, HUMIDITY_CARD, "Humidity", "%");
-Card feedButton(&dashboard, BUTTON_CARD, "Alimentar");
-Card bombaDeArButton(&dashboard, BUTTON_CARD, "Bomba de ar");
-Card lampadaUVButton(&dashboard, BUTTON_CARD, "Lâmpada UV");
-Card coolerButton(&dashboard, BUTTON_CARD, "Resfriamento");
-Card servoMin(&dashboard, SLIDER_CARD, "Servo Min", "", -180, 180);
-Card servoMax(&dashboard, SLIDER_CARD, "Servo Max", "", -180, 180);
-bool estaAlimentando = false;
-
-
-enum StatusAlimentacao {
-	Parado = 0,
-	Alimentando,
-	Retornando,
-	AlimentacaoConcluida
-} statusAlimentacao;
+#include <ServoController.h>
+ServoController servoController(D4, 5, 1000, 1000, 500, D2, 0, 85); // Instância do ServoController
+const int ledPin = LED_BUILTIN; // Pino do LED do ESP8266
 
 
 int posGavetaAberta = 0;
-int posGavetaFechada = 90;
+int posGavetaFechada = 85;
+void configurarRotasDePaginas(){
+	// Configuração das rotas da página web
+	server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
+		String html = "<html><body>";
+		html += "<h1>Controle do Servo e Relés</h1>";
+		html += "<button onclick=\"toggleServo()\">Acionar Servo</button><br><br>";
+		html += "<button onclick=\"toggleRelay(1)\">Acionar Relé 1</button><br><br>";
+		html += "<button onclick=\"toggleRelay(2)\">Acionar Relé 2</button><br><br>";
+		html += "<script>function toggleServo(){fetch('/servo', {method: 'POST'});}"
+				"function toggleRelay(relay){fetch('/relay/' + relay, {method: 'POST'});}</script>";
+		html += "</body></html>";
 
-//callback functions
-void firstLightChanged(uint8_t brightness);
-void setupAlimentadorPeixe(int SERVO_PIN);
-void alimentarPeixes();
+		request->send(200, "text/html", html);
+	});
 
-unsigned long startMillis0;
-unsigned currentMillis;
-const unsigned long period = 1000;
+	// Rota para acionar o servo
+	server.on("/servo", HTTP_POST, [](AsyncWebServerRequest *request) {
+		if ( ! servoController.isMoving() ){
+			servoController.resetMoveCount();
+		}
+		Serial.println("O Servo foi acionado..."); 
 
-void Serialprintln(String s){
-	currentMillis = millis();
-	if (currentMillis - startMillis0 <= period) {
-		Serial.println(s);
-		startMillis0 = millis();
+		request->send(200);
+	});
 
-	}
+	// Rota para acionar os relés
+	server.on("/relay/<int>", HTTP_POST, [](AsyncWebServerRequest *request) {
+		int relay = request->pathArg(0).toInt();
+		Serial.println("O relé "+ String(relay) + " foi aceionado"); 
+		// Lógica para acionar o relé conforme a variável relay
+
+		request->send(200);
+	});
+	server.onNotFound([](AsyncWebServerRequest *request){
+		if (!espalexa.handleAlexaApiCall(request)) //if you don't know the URI, ask espalexa whether it is an Alexa control request
+		{
+			//whatever you want to do with 404s
+			request->send(404, "text/plain", "Not found");
+		}
+	});
+	// espalexa.addDevice("Alimentador aquario", alexaAlimentarAquario); //simplest definition, default state off
+	// espalexa.addDevice("Lâmpada UV", lampadaUVChanged); //simplest definition, default state off
+	// espalexa.addDevice("Resfriar aquario", firstLightChanged); //simplest definition, default state off
+	// espalexa.addDevice("Bomba de ar", bombaArChanged); //simplest definition, default state off
+
+	
 }
-void setup() {
-    // WiFi.mode(WIFI_STA); // explicitly set mode, esp defaults to STA+AP
-    // it is a good practice to make sure your code sets wifi mode how you want it.
+Card feedButton(&dashboard, BUTTON_CARD, "Alimentar");
 
-    // put your setup code here, to run once:
-    Serial.begin(115200);
+
+void setup() {
+
+	Serial.begin(115200);
     
     //WiFiManager, Local intialization. Once its business is done, there is no need to keep it around
     AsyncWiFiManager wm(&server,&dns);
+
+	char buffer[10];
+
+	AsyncWiFiManagerParameter custom_servo_min_param("SMin", "Alimentador Fechado", itoa(posGavetaFechada, buffer,10), 3);
+	wm.addParameter(&custom_servo_min_param);
+
+	AsyncWiFiManagerParameter custom_servo_max_param("SMax", "Alimentador Aberto", itoa(posGavetaAberta, buffer,10), 3);
+	wm.addParameter(&custom_servo_max_param);
+
+	
 
     // reset settings - wipe stored credentials for testing
     // these are stored by the esp library
@@ -113,153 +124,52 @@ void setup() {
   		Serial.println(WiFi.localIP());
 		server.begin();
 		
-	
-
-		setupAlimentadorPeixe(SERVO1_PIN);
 		
-		feedButton.update(false);
-		servoMin.update(posGavetaAberta);
-		servoMax.update(posGavetaFechada);
+		posGavetaFechada = atoi(custom_servo_min_param.getValue());
+
+		posGavetaAberta = atoi(custom_servo_max_param.getValue());
+
+		pinMode(ledPin, OUTPUT);
+
+		configurarRotasDePaginas();
+
+		espalexa.begin(&server); //give espalexa a pointer to your server object so it can use your server instead of creating its own
+		//server.begin(); //omit this since it will be done by espalexa.begin(&server)
+  		// Inicia o servidor
+		servoController.checkConnections();
 
 		feedButton.attachCallback([&](int value){
 			Serial.println("[Card1] Button Callback Triggered: "+String((value == 1)?"true":"false"));
-			if ( value == 1 && statusAlimentacao == StatusAlimentacao::Parado ){
+			if ( value == 1 ){
 				Serial.println("Botao clicado");
-				statusAlimentacao = StatusAlimentacao::Alimentando;
+				if ( ! servoController.isMoving() ){
+					servoController.resetMoveCount();
+				}
 			}
 			feedButton.update(value);
 			dashboard.sendUpdates();
 		});
-
-		servoMin.attachCallback([&](int value){
-			Serial.println("[servoMin] Slider Callback Triggered: "+String(value));
-			servoMin.update(value);
-			posGavetaAberta = value;
-			dashboard.sendUpdates();
-
-		});
-		servoMax.attachCallback([&](int value){
-			Serial.println("[servoMax] Slider Callback Triggered: "+String(value));
-			servoMax.update(value);
-			posGavetaFechada = value;
-			dashboard.sendUpdates();
-
-		});
-
-
-		server.onNotFound([](AsyncWebServerRequest *request){
-		if (!espalexa.handleAlexaApiCall(request)) //if you don't know the URI, ask espalexa whether it is an Alexa control request
-		{
-			//whatever you want to do with 404s
-			request->send(404, "text/plain", "Not found");
-		}
-		});
-			// Define your devices here.
-		espalexa.addDevice("Alimentador aquario", firstLightChanged); //simplest definition, default state off
-		espalexa.addDevice("Lâmpada UV", firstLightChanged); //simplest definition, default state off
-		espalexa.addDevice("Resfriar aquario", firstLightChanged); //simplest definition, default state off
-		espalexa.addDevice("Bomba de ar", firstLightChanged); //simplest definition, default state off
-
-		espalexa.begin(&server); //give espalexa a pointer to your server object so it can use your server instead of creating its own
-		//server.begin(); //omit this since it will be done by espalexa.begin(&server)
-    }
-
+	}
+	Serial.println(":::::::: ESP Pronto :::::::: "); 
+	
+ 	 	
 }
-
-
 
 void loop() {
-	temperature.update((int)random(0, 50));
-	humidity.update((int)random(0, 100));
-	
-	//feedButton.update(statusAlimentacao != StatusAlimentacao::Parado);
-	/* Send Updates to our Dashboard (realtime) */
 	dashboard.sendUpdates();
 	espalexa.loop();
+ 	servoController.update(); // Atualiza o controle do servo
 
-	alimentarPeixes();
-   
-	/* 
-	Delay is just for demonstration purposes in this example,
-	Replace this code with 'millis interval' in your final project.
-	*/
-	//delay(100);
-	// put your main code here, to run repeatedly:   
-}
+//   // Piscar o LED sempre que o servo estiver se movendo
+//   if (servoController.isMoving()) {
+//     static unsigned long previousMillis = 0;
+//     static bool ledState = false;
+//     unsigned long currentMillis = millis();
 
-
-//our callback functions
-void firstLightChanged(uint8_t brightness) {
-    Serial.print("Device 1 changed to ");
-    
-    //do what you need to do here
-
-    //EXAMPLE
-    if (brightness == 255) {
-      Serial.println("ON");
-    }
-    else if (brightness == 0) {
-      Serial.println("OFF");
-    }
-    else {
-      Serial.print("DIM "); Serial.println(brightness);
-    }
-}
-
-
-//StatusAlimentacao statusAlimentacao = StatusAlimentacao::Parado; // 0 - parado; 1 - alimentando; 2 - retornando alimentacao;
-void alimentarPeixes(){
-	switch (statusAlimentacao)
-	{
-		case StatusAlimentacao::Parado: {
-			if(servo.attached()){
-				servo.detach();
-				Serial.println("Servo desconectado...");
-			}
-			feedButton.update(false);
-			dashboard.sendUpdates(true);
-			break;
-		}
-		case StatusAlimentacao::Alimentando: { //1 - alimentando
-			if(!servo.attached()){
-				if (servo.attach(SERVO1_PIN, posGavetaFechada) == INVALID_SERVO) {
-					Serial.println("Erro ao conectar a servo...");
-					statusAlimentacao = StatusAlimentacao::Parado;
-					return;
-				}
-			}
-			feedButton.update(true);
-			dashboard.sendUpdates(true);
-			Serial.println("Angulo 1 = " + servo.getCurrentAngle());
-
-			servo.startEaseToD(posGavetaAberta, 1000);
-			Serial.println("Servo Alimentando...");
-			statusAlimentacao = StatusAlimentacao::Retornando;
-		}
-		case StatusAlimentacao::Retornando: {
-			//Serialprintln("Servo Retornando...");
-			if ( ! servo.isMoving() ) {
-				Serial.print("Angulo 2 = " );
-				Serial.println( servo.getCurrentAngle());
-				Serial.println("Servo Retornando...");
-				servo.startEaseToD(posGavetaFechada, 1000);
-				statusAlimentacao = StatusAlimentacao::AlimentacaoConcluida;
-			}
-		}
-		case StatusAlimentacao::AlimentacaoConcluida: {
-			//Serialprintln("Servo AlimentacaoConcluida...");
-			if ( ! servo.isMoving()) {
-				Serial.println("Servo AlimentacaoConcluida...");
-				Serial.print("Angulo 3 = " );
-				Serial.println( servo.getCurrentAngle());
-				
-				statusAlimentacao = StatusAlimentacao::Parado;
-			}
-		}
-	}
-}
-void setupAlimentadorPeixe(int SERVO_PIN){
-	statusAlimentacao = StatusAlimentacao::Parado;
-	//servo.attach(SERVO_PIN);
-	//servo.write(0); // Inicia motor posição zero
+//     if (currentMillis - previousMillis >= 500) {
+//       previousMillis = currentMillis;
+//       ledState = !ledState;
+//       digitalWrite(ledPin, ledState);
+//     }
+//   }
 }
