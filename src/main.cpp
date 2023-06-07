@@ -31,6 +31,27 @@ const int ledPin = LED_BUILTIN; // Pino do LED do ESP8266
 
 int posGavetaAberta = 0;
 int posGavetaFechada = 85;
+EspalexaDevice* alexaServoDevice;
+
+
+void alimentarPeixes(){
+	if ( ! servoController.isMoving() ){
+		alexaServoDevice->setState(true);
+		servoController.resetMoveCount();
+	}
+	Serial.println("O Servo foi acionado...");
+}
+void alexaAlimentarAquario(EspalexaDevice* d){
+	if (d == nullptr) return; //this is good practice, but not required
+
+	if (d->getValue()){
+		alimentarPeixes();
+	} else {
+		if ( servoController.isMoving() ){
+			alexaServoDevice->setState(false);
+		}
+	}
+}
 void configurarRotasDePaginas(){
 	// Configuração das rotas da página web
 	server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -48,11 +69,7 @@ void configurarRotasDePaginas(){
 
 	// Rota para acionar o servo
 	server.on("/servo", HTTP_POST, [](AsyncWebServerRequest *request) {
-		if ( ! servoController.isMoving() ){
-			servoController.resetMoveCount();
-		}
-		Serial.println("O Servo foi acionado..."); 
-
+		alimentarPeixes();
 		request->send(200);
 	});
 
@@ -71,7 +88,9 @@ void configurarRotasDePaginas(){
 			request->send(404, "text/plain", "Not found");
 		}
 	});
-	// espalexa.addDevice("Alimentador aquario", alexaAlimentarAquario); //simplest definition, default state off
+	espalexa.addDevice("Alimentador aquario", alexaAlimentarAquario, EspalexaDeviceType::onoff); //simplest definition, default state off
+	alexaServoDevice = espalexa.getDevice(0); 
+	alexaServoDevice->setState(false);
 	// espalexa.addDevice("Lâmpada UV", lampadaUVChanged); //simplest definition, default state off
 	// espalexa.addDevice("Resfriar aquario", firstLightChanged); //simplest definition, default state off
 	// espalexa.addDevice("Bomba de ar", bombaArChanged); //simplest definition, default state off
@@ -136,15 +155,14 @@ void setup() {
 		espalexa.begin(&server); //give espalexa a pointer to your server object so it can use your server instead of creating its own
 		//server.begin(); //omit this since it will be done by espalexa.begin(&server)
   		// Inicia o servidor
+		espalexa.setDiscoverable(true);
 		servoController.checkConnections();
 
 		feedButton.attachCallback([&](int value){
 			Serial.println("[Card1] Button Callback Triggered: "+String((value == 1)?"true":"false"));
 			if ( value == 1 ){
 				Serial.println("Botao clicado");
-				if ( ! servoController.isMoving() ){
-					servoController.resetMoveCount();
-				}
+				alimentarPeixes();
 			}
 			feedButton.update(value);
 			dashboard.sendUpdates();
@@ -154,22 +172,26 @@ void setup() {
 	
  	 	
 }
+void piscarLed(){
+	// Piscar o LED sempre que o servo estiver se movendo
+  if (servoController.isMoving()) {
+    static unsigned long previousMillis = 0;
+    static bool ledState = false;
+    unsigned long currentMillis = millis();
 
+    if (currentMillis - previousMillis >= 500) {
+      previousMillis = currentMillis;
+      ledState = !ledState;
+      digitalWrite(ledPin, ledState);
+    }
+  }
+  else{
+	digitalWrite(ledPin, false);
+  }
+}
 void loop() {
-	dashboard.sendUpdates();
-	espalexa.loop();
+	//dashboard.sendUpdates();
  	servoController.update(); // Atualiza o controle do servo
-
-//   // Piscar o LED sempre que o servo estiver se movendo
-//   if (servoController.isMoving()) {
-//     static unsigned long previousMillis = 0;
-//     static bool ledState = false;
-//     unsigned long currentMillis = millis();
-
-//     if (currentMillis - previousMillis >= 500) {
-//       previousMillis = currentMillis;
-//       ledState = !ledState;
-//       digitalWrite(ledPin, ledState);
-//     }
-//   }
+	espalexa.loop();
+	//piscarLed();
 }

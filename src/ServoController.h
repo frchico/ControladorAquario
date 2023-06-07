@@ -38,7 +38,7 @@ protected:
 	void resumeServoMove() {
 		servoState = IDLE;
 		servoMoveCount++; // Incrementa o contador de movimentos
-		Serial.println("Movimento "+ String(servoMoveCount) + " de " + String(maxServoMoveCount));
+		Serial.println("Movimento "+ String(servoMoveCount) + " de " + String(maxServoMoveCount*2));
 		if ( ! isMoving() && servoMotor.attached() ) {
 			Serial.println("- Servo Descontectado...");
 			servoMotor.detach(); // Desconecta o servo
@@ -82,7 +82,7 @@ public:
 		servoMoveCount = 0;
 	} 
 	bool isMoving(){
-		return servoMoveCount != maxServoMoveCount;
+		return servoMoveCount != maxServoMoveCount *2;
 	}
 	ServoController(int _servoPin, unsigned int maxMoveCount, unsigned long moveDuration, 
 	unsigned long pauseDuration, unsigned long delayDuration, int btnPin, int minAngle, int maxAngle)
@@ -110,7 +110,7 @@ public:
 		
 		switch (servoState) {
 			case IDLE:
-			if (servoMoveCount < maxServoMoveCount || buttonPressed) {
+			if (isMoving() || buttonPressed) {
 				Serial.println("- startServoMove()");
 				startServoMove();
 			}
