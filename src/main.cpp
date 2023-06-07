@@ -27,10 +27,10 @@ Espalexa espalexa;
 
 int posGavetaAberta = 0;
 int posGavetaFechada = 52;
-int qtdVezesParaAlimentar = 10;
+int qtdVezesParaAlimentar = 3;
 
 #include <ServoController.h>
-ServoController servoController(D4, qtdVezesParaAlimentar, 1000, 1000, 500, D2, posGavetaAberta, posGavetaFechada); // Instância do ServoController
+ServoController servoController(D4, qtdVezesParaAlimentar, posGavetaAberta, posGavetaFechada); // Instância do ServoController
 
 #include <Ticker.h>
 Ticker ledTicker;
@@ -38,12 +38,33 @@ const int ledPin = LED_BUILTIN; // Pino do LED do ESP8266
 bool ledState = false;
 bool ehParaNotificarAlexaNoTermino = false;
 
-
+void alimentarPeixes();
 void toggleLed() {
   ledState = !ledState;
   digitalWrite(ledPin, ledState);
 }
 
+
+#include <EasyButton.h>
+#define pinButtonAlimentar 0 //D3
+// Number of presses.
+int pressesButton = 3;
+// Timeout.
+int timeoutButton = 2000;
+// Duration.
+int durationButton = 2000;
+// Button.
+EasyButton buttonAlimentarPeixes(pinButtonAlimentar);
+// Callback.
+void onSequenceFactoryButtonMatched() {
+	
+	Serial.println("Botao factory clicado");
+	alimentarPeixes();
+}
+void onPressedForDuration(){
+	Serial.println("Button has been pressed for the given duration!");
+	servoController.checkConnections();	 
+}
 
 EspalexaDevice* alexaServoDevice;
 
@@ -111,6 +132,9 @@ void configurarRotasDePaginas(){
 	
 }
 Card feedButton(&dashboard, BUTTON_CARD, "Alimentar");
+Card abrirButton(&dashboard, BUTTON_CARD, "Abrir");
+Card fecharButton(&dashboard, BUTTON_CARD, "Fechar");
+Card checkServoButton(&dashboard, BUTTON_CARD, "Checar Servo");
 
 
 void setup() {
@@ -171,10 +195,11 @@ void setup() {
 		//server.begin(); //omit this since it will be done by espalexa.begin(&server)
   		// Inicia o servidor
 		espalexa.setDiscoverable(true);
-		servoController.checkConnections();
+		
+		//servoController.checkConnections();
 
 		feedButton.attachCallback([&](int value){
-			Serial.println("[Card1] Button Callback Triggered: "+String((value == 1)?"true":"false"));
+			Serial.println("[feedButton] Button Callback Triggered: "+String((value == 1)?"true":"false"));
 			if ( value == 1 ){
 				Serial.println("Botao clicado");
 				alimentarPeixes();
@@ -182,6 +207,43 @@ void setup() {
 			feedButton.update(value);
 			dashboard.sendUpdates();
 		});
+
+		abrirButton.attachCallback([&](int value){
+			Serial.println("[abrirButton] Button Callback Triggered: "+String((value == 1)?"true":"false"));
+			if ( value == 1 ){
+				Serial.println("Botao clicado");
+				servoController.open();
+			}
+			abrirButton.update(value);
+			dashboard.sendUpdates();
+		});
+
+
+		fecharButton.attachCallback([&](int value){
+			Serial.println("[fecharButton] Button Callback Triggered: "+String((value == 1)?"true":"false"));
+			if ( value == 1 ){
+				Serial.println("Botao clicado");
+				servoController.close();
+			}
+			fecharButton.update(value);
+			dashboard.sendUpdates();
+		});
+
+		checkServoButton.attachCallback([&](int value){
+			Serial.println("[checkServoButton] Button Callback Triggered: "+String((value == 1)?"true":"false"));
+			if ( value == 1 ){
+				Serial.println("Botao clicado");
+				servoController.checkConnections();
+			}
+			checkServoButton.update(value);
+			dashboard.sendUpdates();
+		});
+
+		buttonAlimentarPeixes.begin();
+
+		// Attach callback.
+		buttonAlimentarPeixes.onSequence(pressesButton, timeoutButton, onSequenceFactoryButtonMatched);
+		buttonAlimentarPeixes.onPressedFor(2000, onPressedForDuration);
 	}
 	Serial.println(":::::::: ESP Pronto :::::::: "); 
 	
@@ -202,9 +264,10 @@ void piscarLed(){
 	}
 }
 void loop() {
-	//dashboard.sendUpdates();
+	dashboard.sendUpdates();
 	piscarLed();
  	servoController.update(); // Atualiza o controle do servo
 	espalexa.loop();
+	buttonAlimentarPeixes.read();
 	//yield();
 }

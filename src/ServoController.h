@@ -2,7 +2,7 @@
 #include <Ticker.h>
 
 bool ehParaMoverServo = false;
-
+bool ehParaDesconectarServo = false;
 class ServoController {
 private:
 	enum ServoState {
@@ -15,14 +15,10 @@ private:
 
 	Servo servoMotor;
 	int servoPos;
-
 	ServoState servoState;
-	unsigned long servoMoveStartTime;
 	unsigned int servoMoveCount;
 	const unsigned int maxServoMoveCount;
 	const unsigned long servoMoveDuration;
-	const unsigned long servoPauseDuration;
-	const unsigned long servoDelayDuration;
 	const int servoPin;
 	const int buttonPin;
 	bool buttonPressed;
@@ -32,9 +28,17 @@ private:
 	const int setupServoPosMax = 2400;
 
 	Ticker servoTicker;
+	Ticker servoTickerControll;
 protected:
-  
-	
+  	static void moverServo() {
+		if ( ! ehParaMoverServo ){
+			Serial.println("moverServo acionado...");
+			ehParaMoverServo = true;
+		}
+	}
+	static void marcarParaDesconectarServo(){
+		ehParaDesconectarServo = true;
+	}
   
 	void checkButton() {
 		if (digitalRead(buttonPin) == LOW && !buttonPressed) {
@@ -49,6 +53,31 @@ protected:
 	}  
 public:
 
+	
+	void close(){
+		servoMoveCount = 1;
+		if ( ! servoMotor.attached()) {
+			if ( servoMotor.attach(servoPin, setupServoPosMin, setupServoPosMax, servoAngleMax) != 0 ){
+				Serial.println("- Servo Conectado...");
+				//yield();
+			}
+			servoPos = servoAngleMax;
+			servoTickerControll.attach(2, marcarParaDesconectarServo);
+		}
+		servoMoveCount = maxServoMoveCount;
+	}
+	void open(){
+		servoMoveCount = 1;
+		if ( ! servoMotor.attached()) {
+			if ( servoMotor.attach(servoPin, setupServoPosMin, setupServoPosMax, servoAngleMin) != 0 ){
+				Serial.println("- Servo Conectado...");
+			//	yield();
+			}
+			servoPos = servoAngleMin;
+			servoTickerControll.attach(2, marcarParaDesconectarServo);
+		}
+		servoMoveCount = maxServoMoveCount;
+	}
 	~ServoController(){
 		servoTicker.~Ticker();
 		if (servoMotor.attached()){
@@ -56,12 +85,7 @@ public:
 		}
 		servoMotor.~Servo();
 	}
-	static void moverServo() {
-		if ( ! ehParaMoverServo ){
-			Serial.println("moverServo acionado...");
-			ehParaMoverServo = true;
-		}
-	}
+	
 	bool checkConnections(){
 		Serial.println("Iniciando check dos servos...");
 		if (! servoMotor.attached() ){
@@ -86,22 +110,43 @@ public:
 		if ( !isMoving()){
 			servoMoveCount = 0;
 		//	Serial.println("Ticker acionado...");
-			servoTicker.attach(2.5, moverServo);
+			servoTicker.attach(servoMoveDuration, moverServo);
 		}
 	} 
 	bool isMoving(){
 		return servoMoveCount != maxServoMoveCount;
 	}
-	ServoController(int _servoPin, unsigned int maxMoveCount, unsigned long moveDuration, 
-	unsigned long pauseDuration, unsigned long delayDuration, int btnPin, int minAngle, int maxAngle)
+	ServoController(
+		int _servoPin, 
+		unsigned int maxMoveCount, 
+		int minAngle,
+		int maxAngle)
 	: servoPos(minAngle),
 		servoState(IDLE),
-		servoMoveStartTime(0),
+		servoMoveCount((maxMoveCount+1)*2),
+		maxServoMoveCount((maxMoveCount+1)*2),
+		servoMoveDuration(2.5),
+		servoPin(_servoPin),
+		buttonPin(0),
+		buttonPressed(false),
+		servoAngleMin(minAngle),
+		servoAngleMax(maxAngle)
+	{
+		//servoMotor.attach(servoPin, setupServoPosMin, setupServoPosMax);
+		//pinMode(buttonPin, INPUT_PULLUP);
+	}
+	ServoController(
+		int _servoPin, 
+		unsigned int maxMoveCount, 
+		unsigned long moveDuration, 
+		int btnPin, 
+		int minAngle,
+		int maxAngle)
+	: servoPos(minAngle),
+		servoState(IDLE),
 		servoMoveCount((maxMoveCount+1)*2),
 		maxServoMoveCount((maxMoveCount+1)*2),
 		servoMoveDuration(moveDuration),
-		servoPauseDuration(pauseDuration),
-		servoDelayDuration(delayDuration),
 		servoPin(_servoPin),
 		buttonPin(btnPin),
 		buttonPressed(false),
@@ -133,7 +178,7 @@ public:
 			servoPos = (servoPos == servoAngleMin) ? servoAngleMax : servoAngleMin; // Alterna entre 0 e 180 graus
 			servoMoveCount++;
 			Serial.println("Ticker acionado...");
-			servoTicker.attach(2, moverServo);
+			servoTicker.attach(servoMoveDuration, moverServo);
 			//yield();
 		}
 		
@@ -148,6 +193,14 @@ public:
 				Serial.println("servoMotor detach...");
 			}
 		}
-		
+		if ( ehParaDesconectarServo ){
+			if (servoMotor.attached()){
+				servoMotor.detach();
+				Serial.println("servoMotor detach...");	
+			}
+			if (servoTickerControll.active()){
+				servoTickerControll.detach();
+			}
+		}
 	}
 };
