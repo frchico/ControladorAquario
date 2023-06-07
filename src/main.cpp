@@ -24,33 +24,46 @@ ESPDash dashboard(&server);
 Espalexa espalexa;
 
 
-#include <ServoController.h>
-ServoController servoController(D4, 5, 1000, 1000, 500, D2, 0, 85); // Instância do ServoController
-const int ledPin = LED_BUILTIN; // Pino do LED do ESP8266
-
 
 int posGavetaAberta = 0;
-int posGavetaFechada = 85;
+int posGavetaFechada = 52;
+int qtdVezesParaAlimentar = 10;
+
+#include <ServoController.h>
+ServoController servoController(D4, qtdVezesParaAlimentar, 1000, 1000, 500, D2, posGavetaAberta, posGavetaFechada); // Instância do ServoController
+
+#include <Ticker.h>
+Ticker ledTicker;
+const int ledPin = LED_BUILTIN; // Pino do LED do ESP8266
+bool ledState = false;
+bool ehParaNotificarAlexaNoTermino = false;
+
+
+void toggleLed() {
+  ledState = !ledState;
+  digitalWrite(ledPin, ledState);
+}
+
+
 EspalexaDevice* alexaServoDevice;
 
 
 void alimentarPeixes(){
 	if ( ! servoController.isMoving() ){
-		alexaServoDevice->setState(true);
+		ledTicker.attach(0.2, toggleLed);
+		alexaServoDevice->setValue(100);
+		ehParaNotificarAlexaNoTermino = true;
 		servoController.resetMoveCount();
 	}
 	Serial.println("O Servo foi acionado...");
 }
 void alexaAlimentarAquario(EspalexaDevice* d){
 	if (d == nullptr) return; //this is good practice, but not required
-
-	if (d->getValue()){
+	Serial.println("Alexa informou o status");
+	if ( d->getValue() == 100 ){
+		Serial.println("Alexa estava desligada e agora está ligada");
 		alimentarPeixes();
-	} else {
-		if ( servoController.isMoving() ){
-			alexaServoDevice->setState(false);
-		}
-	}
+	} 
 }
 void configurarRotasDePaginas(){
 	// Configuração das rotas da página web
@@ -90,7 +103,7 @@ void configurarRotasDePaginas(){
 	});
 	espalexa.addDevice("Alimentador aquario", alexaAlimentarAquario, EspalexaDeviceType::onoff); //simplest definition, default state off
 	alexaServoDevice = espalexa.getDevice(0); 
-	alexaServoDevice->setState(false);
+	alexaServoDevice->setValue(0);
 	// espalexa.addDevice("Lâmpada UV", lampadaUVChanged); //simplest definition, default state off
 	// espalexa.addDevice("Resfriar aquario", firstLightChanged); //simplest definition, default state off
 	// espalexa.addDevice("Bomba de ar", bombaArChanged); //simplest definition, default state off
@@ -115,7 +128,9 @@ void setup() {
 	AsyncWiFiManagerParameter custom_servo_max_param("SMax", "Alimentador Aberto", itoa(posGavetaAberta, buffer,10), 3);
 	wm.addParameter(&custom_servo_max_param);
 
-	
+	AsyncWiFiManagerParameter custom_qtd_vezes_alimentar("SQtd", "Quantas Vezes", itoa(qtdVezesParaAlimentar, buffer,10), 3);
+	wm.addParameter(&custom_qtd_vezes_alimentar);
+
 
     // reset settings - wipe stored credentials for testing
     // these are stored by the esp library
@@ -174,24 +189,22 @@ void setup() {
 }
 void piscarLed(){
 	// Piscar o LED sempre que o servo estiver se movendo
-  if (servoController.isMoving()) {
-    static unsigned long previousMillis = 0;
-    static bool ledState = false;
-    unsigned long currentMillis = millis();
-
-    if (currentMillis - previousMillis >= 500) {
-      previousMillis = currentMillis;
-      ledState = !ledState;
-      digitalWrite(ledPin, ledState);
-    }
-  }
-  else{
-	digitalWrite(ledPin, false);
-  }
+	if ( !servoController.isMoving()) {
+		if ( ledTicker.active()) {
+			ledTicker.detach();	
+			digitalWrite(ledPin, LOW);
+		}
+		if ( ehParaNotificarAlexaNoTermino ){
+			Serial.println("Alexa set off");
+			ehParaNotificarAlexaNoTermino = false;
+			alexaServoDevice->setValue(0);
+		}
+	}
 }
 void loop() {
 	//dashboard.sendUpdates();
+	piscarLed();
  	servoController.update(); // Atualiza o controle do servo
 	espalexa.loop();
-	//piscarLed();
+	//yield();
 }
