@@ -89,7 +89,7 @@ public:
 	: servoPos(minAngle),
 		servoState(IDLE),
 		servoMoveStartTime(0),
-		servoMoveCount(maxMoveCount),
+		servoMoveCount(maxMoveCount*2),
 		maxServoMoveCount(maxMoveCount),
 		servoMoveDuration(moveDuration),
 		servoPauseDuration(pauseDuration),
