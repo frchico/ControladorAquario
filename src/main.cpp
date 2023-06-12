@@ -29,10 +29,13 @@ int posGavetaAberta = 0;
 int posGavetaFechada = 52;
 int qtdVezesParaAlimentar = 3;
 
-#include <ServoController.h>
-ServoController servoController(D4, qtdVezesParaAlimentar, posGavetaAberta, posGavetaFechada); // Instância do ServoController
 
-#include <Ticker.h>
+#include <ServoController.h>
+ServoController servoController(D5, qtdVezesParaAlimentar, posGavetaAberta, posGavetaFechada); // Instância do ServoController
+
+
+
+// #include <Ticker.h>
 Ticker ledTicker;
 const int ledPin = LED_BUILTIN; // Pino do LED do ESP8266
 bool ledState = false;
@@ -136,7 +139,19 @@ Card abrirButton(&dashboard, BUTTON_CARD, "Abrir");
 Card fecharButton(&dashboard, BUTTON_CARD, "Fechar");
 Card checkServoButton(&dashboard, BUTTON_CARD, "Checar Servo");
 
+#include <OneWire.h>
+#include <DallasTemperature.h>
 
+const int pinDS18B20 = D2; // Pino onde o DS18B20 está conectado
+
+OneWire oneWire(pinDS18B20);
+DallasTemperature sensors(&oneWire);
+Ticker temperaturaTicker;
+bool ehParaLerTemperatura = false;
+int tempoLeituraTemperatura = 3*60;
+void marcarParaLerTemperatura(){
+	ehParaLerTemperatura = true;
+}
 void setup() {
 
 	Serial.begin(115200);
@@ -200,6 +215,7 @@ void setup() {
 
 		feedButton.attachCallback([&](int value){
 			Serial.println("[feedButton] Button Callback Triggered: "+String((value == 1)?"true":"false"));
+			servoController.printStatus();
 			if ( value == 1 ){
 				Serial.println("Botao clicado");
 				alimentarPeixes();
@@ -209,6 +225,8 @@ void setup() {
 		});
 
 		abrirButton.attachCallback([&](int value){
+			servoController.printStatus();
+
 			Serial.println("[abrirButton] Button Callback Triggered: "+String((value == 1)?"true":"false"));
 			if ( value == 1 ){
 				Serial.println("Botao clicado");
@@ -220,6 +238,8 @@ void setup() {
 
 
 		fecharButton.attachCallback([&](int value){
+			servoController.printStatus();
+
 			Serial.println("[fecharButton] Button Callback Triggered: "+String((value == 1)?"true":"false"));
 			if ( value == 1 ){
 				Serial.println("Botao clicado");
@@ -230,6 +250,8 @@ void setup() {
 		});
 
 		checkServoButton.attachCallback([&](int value){
+			servoController.printStatus();
+
 			Serial.println("[checkServoButton] Button Callback Triggered: "+String((value == 1)?"true":"false"));
 			if ( value == 1 ){
 				Serial.println("Botao clicado");
@@ -244,11 +266,16 @@ void setup() {
 		// Attach callback.
 		buttonAlimentarPeixes.onSequence(pressesButton, timeoutButton, onSequenceFactoryButtonMatched);
 		buttonAlimentarPeixes.onPressedFor(2000, onPressedForDuration);
+
+		sensors.begin(); // Inicializa o sensor DS18B20
+		temperaturaTicker.attach(tempoLeituraTemperatura, marcarParaLerTemperatura);
 	}
 	Serial.println(":::::::: ESP Pronto :::::::: "); 
 	
  	 	
 }
+
+
 void piscarLed(){
 	// Piscar o LED sempre que o servo estiver se movendo
 	if ( !servoController.isMoving()) {
@@ -263,11 +290,24 @@ void piscarLed(){
 		}
 	}
 }
+void obterTemperatura(){
+	if(ehParaLerTemperatura){
+		ehParaLerTemperatura = false;
+		sensors.requestTemperatures(); // Solicita a leitura da temperatura
+
+		// Lê e imprime a temperatura em graus Celsius
+		float temperatureC = sensors.getTempCByIndex(0);
+		Serial.print("Temperatura: ");
+		Serial.print(temperatureC);
+		Serial.println(" °C");
+	}
+}
 void loop() {
 	dashboard.sendUpdates();
 	piscarLed();
  	servoController.update(); // Atualiza o controle do servo
 	espalexa.loop();
 	buttonAlimentarPeixes.read();
+	obterTemperatura();
 	//yield();
 }
