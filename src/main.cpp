@@ -1,3 +1,4 @@
+#include <ESP8266WiFi.h>
 #include <Servo.h>
 
 
@@ -24,9 +25,8 @@ ESPDash dashboard(&server);
 Espalexa espalexa;
 
 
-
-int posGavetaAberta = 0;
-int posGavetaFechada = 52;
+int posGavetaAberta = 3;
+int posGavetaFechada = 48;
 int qtdVezesParaAlimentar = 3;
 
 
@@ -36,15 +36,22 @@ ServoController servoController(D5, qtdVezesParaAlimentar, posGavetaAberta, posG
 
 
 // #include <Ticker.h>
-Ticker ledTicker;
-const int ledPin = LED_BUILTIN; // Pino do LED do ESP8266
+//Ticker ledTicker;
+const int LedAlimentarPIN = 4; //5;// LED_BUILTIN; // Pino do LED do ESP8266
+const int ledPinVerde = 5; // 4;
 bool ledState = false;
 bool ehParaNotificarAlexaNoTermino = false;
+
+
+#include <jled.h>
+// turn builtin LED on after 1 second.
+auto led = JLed(LedAlimentarPIN).Blink(1000, 500).Forever();
+
 
 void alimentarPeixes();
 void toggleLed() {
   ledState = !ledState;
-  digitalWrite(ledPin, ledState);
+  digitalWrite(LedAlimentarPIN, ledState);
 }
 
 
@@ -60,7 +67,6 @@ int durationButton = 2000;
 EasyButton buttonAlimentarPeixes(pinButtonAlimentar);
 // Callback.
 void onSequenceFactoryButtonMatched() {
-	
 	Serial.println("Botao factory clicado");
 	alimentarPeixes();
 }
@@ -74,7 +80,8 @@ EspalexaDevice* alexaServoDevice;
 
 void alimentarPeixes(){
 	if ( ! servoController.isMoving() ){
-		ledTicker.attach(0.2, toggleLed);
+		//ledTicker.attach(0.5, toggleLed);
+		led.Reset();
 		alexaServoDevice->setValue(100);
 		ehParaNotificarAlexaNoTermino = true;
 		servoController.resetMoveCount();
@@ -138,6 +145,10 @@ Card feedButton(&dashboard, BUTTON_CARD, "Alimentar");
 Card abrirButton(&dashboard, BUTTON_CARD, "Abrir");
 Card fecharButton(&dashboard, BUTTON_CARD, "Fechar");
 Card checkServoButton(&dashboard, BUTTON_CARD, "Checar Servo");
+Card piscarLedButton(&dashboard, BUTTON_CARD, "LED");
+
+
+bool estahChecandoConexoes = false;
 
 #include <OneWire.h>
 #include <DallasTemperature.h>
@@ -156,6 +167,22 @@ void setup() {
 
 	Serial.begin(115200);
     
+	
+
+	pinMode(LedAlimentarPIN, OUTPUT);
+	pinMode(ledPinVerde, OUTPUT);
+
+
+	Serial.println("LED = HIGH");
+	digitalWrite(ledPinVerde, HIGH);
+	digitalWrite(LedAlimentarPIN, HIGH);
+	delay(1000);
+
+	Serial.println("LED = LOW");
+	digitalWrite(ledPinVerde, LOW);
+	digitalWrite(LedAlimentarPIN, LOW);
+	delay(1000);
+
     //WiFiManager, Local intialization. Once its business is done, there is no need to keep it around
     AsyncWiFiManager wm(&server,&dns);
 
@@ -167,7 +194,7 @@ void setup() {
 	AsyncWiFiManagerParameter custom_servo_max_param("SMax", "Alimentador Aberto", itoa(posGavetaAberta, buffer,10), 3);
 	wm.addParameter(&custom_servo_max_param);
 
-	AsyncWiFiManagerParameter custom_qtd_vezes_alimentar("SQtd", "Quantas Vezes", itoa(qtdVezesParaAlimentar, buffer,10), 3);
+	AsyncWiFiManagerParameter custom_qtd_vezes_alimentar("SV", "Quantas Vezes", itoa(qtdVezesParaAlimentar, buffer,10), 3);
 	wm.addParameter(&custom_qtd_vezes_alimentar);
 
 
@@ -202,8 +229,7 @@ void setup() {
 
 		posGavetaAberta = atoi(custom_servo_max_param.getValue());
 
-		pinMode(ledPin, OUTPUT);
-
+		
 		configurarRotasDePaginas();
 
 		espalexa.begin(&server); //give espalexa a pointer to your server object so it can use your server instead of creating its own
@@ -231,8 +257,10 @@ void setup() {
 			if ( value == 1 ){
 				Serial.println("Botao clicado");
 				servoController.open();
+				led.Reset();
 			}
-			abrirButton.update(value);
+
+			abrirButton.update(0);
 			dashboard.sendUpdates();
 		});
 
@@ -244,20 +272,34 @@ void setup() {
 			if ( value == 1 ){
 				Serial.println("Botao clicado");
 				servoController.close();
+				led.Off();
 			}
-			fecharButton.update(value);
+			fecharButton.update(0);
 			dashboard.sendUpdates();
 		});
 
 		checkServoButton.attachCallback([&](int value){
 			servoController.printStatus();
+			estahChecandoConexoes = false;
 
 			Serial.println("[checkServoButton] Button Callback Triggered: "+String((value == 1)?"true":"false"));
 			if ( value == 1 ){
 				Serial.println("Botao clicado");
 				servoController.checkConnections();
+				estahChecandoConexoes = true;
 			}
 			checkServoButton.update(value);
+			dashboard.sendUpdates();
+		});
+
+		piscarLedButton.attachCallback([&](int value){
+			int status = digitalRead(ledPinVerde);
+			Serial.println("[piscarLedButton] Button Callback Triggered: "+String((value == 1)?"true":"false") + " E estava = "+ String (status));
+			led.Stop();
+			if (value) {
+				led.Reset();
+			}
+			piscarLedButton.update(value);
 			dashboard.sendUpdates();
 		});
 
@@ -275,21 +317,6 @@ void setup() {
  	 	
 }
 
-
-void piscarLed(){
-	// Piscar o LED sempre que o servo estiver se movendo
-	if ( !servoController.isMoving()) {
-		if ( ledTicker.active()) {
-			ledTicker.detach();	
-			digitalWrite(ledPin, LOW);
-		}
-		if ( ehParaNotificarAlexaNoTermino ){
-			Serial.println("Alexa set off");
-			ehParaNotificarAlexaNoTermino = false;
-			alexaServoDevice->setValue(0);
-		}
-	}
-}
 void obterTemperatura(){
 	if(ehParaLerTemperatura){
 		ehParaLerTemperatura = false;
@@ -302,12 +329,27 @@ void obterTemperatura(){
 		Serial.println(" °C");
 	}
 }
+
+void meuLoop(){
+	// Piscar o LED sempre que o servo estiver se movendo
+	if ( !servoController.isMoving()) {
+		led.Stop();
+		if ( ehParaNotificarAlexaNoTermino ){
+			Serial.println("Alexa set off");
+			ehParaNotificarAlexaNoTermino = false;
+			alexaServoDevice->setValue(0);
+		}
+		estahChecandoConexoes = false;
+	}
+	obterTemperatura();
+
+}
 void loop() {
 	dashboard.sendUpdates();
-	piscarLed();
+	meuLoop();
  	servoController.update(); // Atualiza o controle do servo
 	espalexa.loop();
 	buttonAlimentarPeixes.read();
-	obterTemperatura();
+	led.Update();
 	//yield();
 }

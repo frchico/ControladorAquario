@@ -2,11 +2,12 @@
 #include <Ticker.h>
 
 
-bool ehParaMovimentarServo = false;
-bool ehParaDesconectarServo = false;
+bool ServoController__ehParaMovimentarServo = false;
+bool ServoController__ehParaDesconectarServo = false;
+
 
 void marcarParaMovimentarServo(){
-	ehParaMovimentarServo = true;
+	ServoController__ehParaMovimentarServo = true;
 	Serial.println("- Chamou marcarParaMovimentarServo");
 }
 
@@ -25,7 +26,7 @@ private:
 
 	
 	void setServoTimer(bool newStatus){
-		setServoTimer(newStatus, 1);
+		setServoTimer(newStatus, .5);
 	}
 	void setServoTimer(bool newStatus, float seconds){
 		TickerServo.detach();
@@ -107,24 +108,24 @@ public:
 	}
 	void update(){
 		if ( isMoving() ){
-			if (! ehParaMovimentarServo ){
+			if (! ServoController__ehParaMovimentarServo ){
 				return;
 			}
 			Serial.println("Update is moving...");
-			ehParaMovimentarServo = false;
+			ServoController__ehParaMovimentarServo = false;
 			if (! servoMotor.attached() ){
 				servoMotor.attach(servoPin, setupServoPosMin, setupServoPosMax);
 				Serial.println("Servo conectado");
 			}
 			int posAntiga = servoMotor.read();
 			int novaPosicao = servoPos;
-			Serial.println("Movendo servo de " + String(posAntiga) + " para " + String(novaPosicao));
+			Serial.println("- Movendo servo de " + String(posAntiga) + " para " + String(novaPosicao) + " id = " + String(servoMoveCount));
 			servoMotor.write(novaPosicao);
-			servoMoveCount++;
 			if ( isMoving() ){
 				servoPos = (servoPos == servoAnguloAberto) ? servoAnguloFechado : servoAnguloAberto;
 			}
-			setServoTimer(isMoving(), 2.5);
+			setServoTimer(isMoving(), 1.5);
+			servoMoveCount++;
 		}
 	}
 };
