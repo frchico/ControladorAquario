@@ -25,20 +25,23 @@ ESPDash dashboard(&server);
 Espalexa espalexa;
 
 
-int posGavetaAberta = 3;
-int posGavetaFechada = 48;
-int qtdVezesParaAlimentar = 3;
+int posGavetaAberta = 15;
+int posGavetaFechada = 43;
+int qtdVezesParaAlimentar = 2;
 
 
 #include <ServoController.h>
-ServoController servoController(D5, qtdVezesParaAlimentar, posGavetaAberta, posGavetaFechada); // Instância do ServoController
+//ServoController servoController(D5, qtdVezesParaAlimentar, posGavetaAberta, posGavetaFechada); // Instância do ServoController
+ServoController *servoController; 
 
 
 
 // #include <Ticker.h>
 //Ticker ledTicker;
-const int LedAlimentarPIN = 4; //5;// LED_BUILTIN; // Pino do LED do ESP8266
-const int ledPinVerde = 5; // 4;
+const int pinDS18B20 =D7; // Pino onde o DS18B20 está conectado
+
+const int LedAlimentarPIN = LED_BUILTIN; // Ligado no pino D4 do wemos d1 r1 //5;// LED_BUILTIN; // Pino do LED do ESP8266
+const int ledPinVerde = 4;
 bool ledState = false;
 bool ehParaNotificarAlexaNoTermino = false;
 
@@ -64,7 +67,7 @@ int timeoutButton = 2000;
 // Duration.
 int durationButton = 2000;
 // Button.
-EasyButton buttonAlimentarPeixes(pinButtonAlimentar);
+EasyButton *buttonAlimentarPeixes;
 // Callback.
 void onSequenceFactoryButtonMatched() {
 	Serial.println("Botao factory clicado");
@@ -72,19 +75,19 @@ void onSequenceFactoryButtonMatched() {
 }
 void onPressedForDuration(){
 	Serial.println("Button has been pressed for the given duration!");
-	servoController.checkConnections();	 
+	servoController->checkConnections();	 
 }
 
 EspalexaDevice* alexaServoDevice;
 
 
 void alimentarPeixes(){
-	if ( ! servoController.isMoving() ){
+	if ( ! servoController->isMoving() ){
 		//ledTicker.attach(0.5, toggleLed);
 		led.Reset();
 		alexaServoDevice->setValue(100);
 		ehParaNotificarAlexaNoTermino = true;
-		servoController.resetMoveCount();
+		servoController->resetMoveCount();
 	}
 	Serial.println("O Servo foi acionado...");
 }
@@ -96,7 +99,7 @@ void alexaAlimentarAquario(EspalexaDevice* d){
 		alimentarPeixes();
 	} 
 }
-void configurarRotasDePaginas(){
+void setuHttpServer(){
 	// Configuração das rotas da página web
 	server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
 		String html = "<html><body>";
@@ -132,58 +135,85 @@ void configurarRotasDePaginas(){
 			request->send(404, "text/plain", "Not found");
 		}
 	});
-	espalexa.addDevice("Alimentador aquario", alexaAlimentarAquario, EspalexaDeviceType::onoff); //simplest definition, default state off
-	alexaServoDevice = espalexa.getDevice(0); 
-	alexaServoDevice->setValue(0);
-	// espalexa.addDevice("Lâmpada UV", lampadaUVChanged); //simplest definition, default state off
-	// espalexa.addDevice("Resfriar aquario", firstLightChanged); //simplest definition, default state off
-	// espalexa.addDevice("Bomba de ar", bombaArChanged); //simplest definition, default state off
-
-	
 }
 Card feedButton(&dashboard, BUTTON_CARD, "Alimentar");
 Card abrirButton(&dashboard, BUTTON_CARD, "Abrir");
 Card fecharButton(&dashboard, BUTTON_CARD, "Fechar");
 Card checkServoButton(&dashboard, BUTTON_CARD, "Checar Servo");
 Card piscarLedButton(&dashboard, BUTTON_CARD, "LED");
-
+Card temperaturaCard(&dashboard, TEMPERATURE_CARD, "Temperatura", "°C");
 
 bool estahChecandoConexoes = false;
 
 #include <OneWire.h>
 #include <DallasTemperature.h>
 
-const int pinDS18B20 = D2; // Pino onde o DS18B20 está conectado
 
 OneWire oneWire(pinDS18B20);
 DallasTemperature sensors(&oneWire);
 Ticker temperaturaTicker;
 bool ehParaLerTemperatura = false;
-int tempoLeituraTemperatura = 3*60;
+bool ehParaDeixarLedLigado = false;
+int tempoLeituraTemperatura = 5; //tempo em segundos
 void marcarParaLerTemperatura(){
 	ehParaLerTemperatura = true;
 }
-void setup() {
 
-	Serial.begin(115200);
-    
+void printAddress(DeviceAddress deviceAddress)
+{ 
+  for (uint8_t i = 0; i <  8; i++)
+  {
+    Serial.print("0x");
+    if (deviceAddress[i] < 0x10) Serial.print("0");
+    Serial.print(deviceAddress[i], HEX);
+    if (i < 7) Serial.print(", ");
+  }
+  Serial.println("");
+}
+
+void checkSensorTemperatura(){
+	// locate devices on the bus
+	Serial.println("Locating devices...");
+	Serial.print("Found ");
+	int deviceCount = sensors.getDeviceCount();
+	Serial.print(deviceCount, DEC);
+	Serial.println(" devices.");
+	Serial.println("");
+	DeviceAddress Thermometer;
+	Serial.println("Printing addresses...");
+	for (int i = 0;  i  < deviceCount;  i++)
+	{
+		Serial.print("Sensor ");
+		Serial.print(i+1);
+		Serial.print(" : ");
+		sensors.getAddress(Thermometer, i);
+		printAddress(Thermometer);
+	}
+}
+
+void setupSensorTemperatura(){
+	sensors.begin(); // Inicializa o sensor DS18B20
 	
-
-	pinMode(LedAlimentarPIN, OUTPUT);
-	pinMode(ledPinVerde, OUTPUT);
-
-
-	Serial.println("LED = HIGH");
-	digitalWrite(ledPinVerde, HIGH);
-	digitalWrite(LedAlimentarPIN, HIGH);
+	Serial.println("Carregando sensores de temperatura...");
+	checkSensorTemperatura();
+	Serial.println("Fim da carga dos sensores de temperatura.");
+	temperaturaTicker.attach(tempoLeituraTemperatura, marcarParaLerTemperatura);
 	delay(1000);
+}
+void setupAlexa(){
+	espalexa.begin(&server); //give espalexa a pointer to your server object so it can use your server instead of creating its own
+	
+	espalexa.setDiscoverable(true);
 
-	Serial.println("LED = LOW");
-	digitalWrite(ledPinVerde, LOW);
-	digitalWrite(LedAlimentarPIN, LOW);
-	delay(1000);
-
-    //WiFiManager, Local intialization. Once its business is done, there is no need to keep it around
+	espalexa.addDevice("Alimentador aquário", alexaAlimentarAquario, EspalexaDeviceType::onoff); //simplest definition, default state off
+	alexaServoDevice = espalexa.getDevice(0); 
+	alexaServoDevice->setValue(0);
+	// espalexa.addDevice("Lâmpada UV", lampadaUVChanged); //simplest definition, default state off
+	// espalexa.addDevice("Resfriar aquario", firstLightChanged); //simplest definition, default state off
+	// espalexa.addDevice("Bomba de ar", bombaArChanged); //simplest definition, default state off
+}
+bool setupWifi(){
+	//WiFiManager, Local intialization. Once its business is done, there is no need to keep it around
     AsyncWiFiManager wm(&server,&dns);
 
 	char buffer[10];
@@ -210,7 +240,7 @@ void setup() {
     bool res;
     // res = wm.autoConnect(); // auto generated AP name from chipid
     // res = wm.autoConnect("AutoConnectAP"); // anonymous ap
-    res = wm.autoConnect("AutoConnectAP","123456"); // password protected ap
+    res = wm.autoConnect("AutoConnectAP","12345678"); // password protected ap
 
     if(!res) {
         Serial.println("Failed to connect");
@@ -223,73 +253,91 @@ void setup() {
 		Serial.print("IP Address: ");
   		Serial.println(WiFi.localIP());
 		server.begin();
-		
-		
 		posGavetaFechada = atoi(custom_servo_min_param.getValue());
-
 		posGavetaAberta = atoi(custom_servo_max_param.getValue());
-
+		qtdVezesParaAlimentar = atoi(custom_qtd_vezes_alimentar.getValue());
 		
-		configurarRotasDePaginas();
+	}
+	return res;
+	
+}
+void setupServo(){
+	servoController = new ServoController(D5, qtdVezesParaAlimentar, posGavetaAberta, posGavetaFechada); // Instância do ServoController
 
-		espalexa.begin(&server); //give espalexa a pointer to your server object so it can use your server instead of creating its own
-		//server.begin(); //omit this since it will be done by espalexa.begin(&server)
-  		// Inicia o servidor
-		espalexa.setDiscoverable(true);
-		
-		//servoController.checkConnections();
-
-		feedButton.attachCallback([&](int value){
+}
+void setupEspDash(){
+	feedButton.attachCallback([&](int value){
 			Serial.println("[feedButton] Button Callback Triggered: "+String((value == 1)?"true":"false"));
-			servoController.printStatus();
+			servoController->printStatus();
 			if ( value == 1 ){
 				Serial.println("Botao clicado");
 				alimentarPeixes();
 			}
+			checkServoButton.update(0);
 			feedButton.update(value);
+			abrirButton.update(0);
+			fecharButton.update(0);
 			dashboard.sendUpdates();
+
 		});
 
 		abrirButton.attachCallback([&](int value){
-			servoController.printStatus();
-
+			servoController->printStatus();
+			
+			led.Stop();
 			Serial.println("[abrirButton] Button Callback Triggered: "+String((value == 1)?"true":"false"));
 			if ( value == 1 ){
 				Serial.println("Botao clicado");
-				servoController.open();
-				led.Reset();
+				servoController->open();
+				digitalWrite(LedAlimentarPIN, 1);
 			}
-
-			abrirButton.update(0);
+			checkServoButton.update(0);
+			feedButton.update(0);
+			abrirButton.update(value);
+			fecharButton.update(0);
 			dashboard.sendUpdates();
+
+
 		});
 
 
 		fecharButton.attachCallback([&](int value){
-			servoController.printStatus();
+			servoController->printStatus();
+		
 
+			led.Stop();
 			Serial.println("[fecharButton] Button Callback Triggered: "+String((value == 1)?"true":"false"));
 			if ( value == 1 ){
 				Serial.println("Botao clicado");
-				servoController.close();
-				led.Off();
+				servoController->close();
+				digitalWrite(LedAlimentarPIN, 1);
+				
 			}
-			fecharButton.update(0);
+			checkServoButton.update(0);
+			feedButton.update(0);
+			abrirButton.update(0);
+			fecharButton.update(value);
 			dashboard.sendUpdates();
+
 		});
 
 		checkServoButton.attachCallback([&](int value){
-			servoController.printStatus();
+			servoController->printStatus();
 			estahChecandoConexoes = false;
 
 			Serial.println("[checkServoButton] Button Callback Triggered: "+String((value == 1)?"true":"false"));
 			if ( value == 1 ){
+				led.Reset();
 				Serial.println("Botao clicado");
-				servoController.checkConnections();
+				servoController->checkConnections();
 				estahChecandoConexoes = true;
 			}
 			checkServoButton.update(value);
+			feedButton.update(0);
+			abrirButton.update(0);
+			fecharButton.update(0);
 			dashboard.sendUpdates();
+
 		});
 
 		piscarLedButton.attachCallback([&](int value){
@@ -299,24 +347,57 @@ void setup() {
 			if (value) {
 				led.Reset();
 			}
+			ehParaDeixarLedLigado = value;
 			piscarLedButton.update(value);
 			dashboard.sendUpdates();
+
 		});
 
-		buttonAlimentarPeixes.begin();
+}
 
-		// Attach callback.
-		buttonAlimentarPeixes.onSequence(pressesButton, timeoutButton, onSequenceFactoryButtonMatched);
-		buttonAlimentarPeixes.onPressedFor(2000, onPressedForDuration);
+void setupEasyButton(){
 
-		sensors.begin(); // Inicializa o sensor DS18B20
-		temperaturaTicker.attach(tempoLeituraTemperatura, marcarParaLerTemperatura);
+	buttonAlimentarPeixes = new EasyButton(pinButtonAlimentar);
+	buttonAlimentarPeixes->begin();
+
+	// Attach callback.
+	buttonAlimentarPeixes->onSequence(pressesButton, timeoutButton, onSequenceFactoryButtonMatched);
+	buttonAlimentarPeixes->onPressedFor(2000, onPressedForDuration);
+}
+void setupLeds(){
+	pinMode(LedAlimentarPIN, OUTPUT);
+	pinMode(ledPinVerde, OUTPUT);
+
+
+	Serial.println("LED = HIGH");
+	digitalWrite(ledPinVerde, HIGH);
+	digitalWrite(LedAlimentarPIN, HIGH);
+	delay(1000);
+
+	Serial.println("LED = LOW");
+	digitalWrite(ledPinVerde, LOW);
+	digitalWrite(LedAlimentarPIN, LOW);
+	delay(1000);
+}
+void setup() {
+
+	Serial.begin(115200);
+    
+	setupLeds();
+	setupSensorTemperatura();
+	setupEasyButton();
+
+    if ( setupWifi() ){	
+		setuHttpServer();
+		setupAlexa();
+		setupEspDash();
+		Serial.println(":::::::: ESP Pronto :::::::: "); 
+	} else {
+		Serial.println(":::::::: ESP SEM RECURSO WIFI :::::::: "); 
 	}
-	Serial.println(":::::::: ESP Pronto :::::::: "); 
 	
  	 	
 }
-
 void obterTemperatura(){
 	if(ehParaLerTemperatura){
 		ehParaLerTemperatura = false;
@@ -327,12 +408,13 @@ void obterTemperatura(){
 		Serial.print("Temperatura: ");
 		Serial.print(temperatureC);
 		Serial.println(" °C");
+		temperaturaCard.update(temperatureC);
 	}
 }
 
 void meuLoop(){
 	// Piscar o LED sempre que o servo estiver se movendo
-	if ( !servoController.isMoving()) {
+	if ( !servoController->isMoving()) {
 		led.Stop();
 		if ( ehParaNotificarAlexaNoTermino ){
 			Serial.println("Alexa set off");
@@ -340,16 +422,18 @@ void meuLoop(){
 			alexaServoDevice->setValue(0);
 		}
 		estahChecandoConexoes = false;
+		if ( ! ehParaDeixarLedLigado){
+			digitalWrite(LedAlimentarPIN, LOW);
+		}
 	}
 	obterTemperatura();
 
 }
 void loop() {
-	dashboard.sendUpdates();
 	meuLoop();
- 	servoController.update(); // Atualiza o controle do servo
+	dashboard.sendUpdates();
+ 	servoController->loop(); // Atualiza o controle do servo
 	espalexa.loop();
-	buttonAlimentarPeixes.read();
+	buttonAlimentarPeixes->read();
 	led.Update();
-	//yield();
 }

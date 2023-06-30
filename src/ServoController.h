@@ -1,18 +1,15 @@
 #include <Servo.h>
 #include <Ticker.h>
 
-
-bool ServoController__ehParaMovimentarServo = false;
-bool ServoController__ehParaDesconectarServo = false;
-
-
-void marcarParaMovimentarServo(){
-	ServoController__ehParaMovimentarServo = true;
-	Serial.println("- Chamou marcarParaMovimentarServo");
-}
+#ifdef DEBUG_SERVOCONTROLL
+	#define DEBUG_SERVOCONTROLL_PRINTLN(x) Serial.println(x)
+#else
+	#define DEBUG_SERVOCONTROLL_PRINTLN(x)
+#endif
 
 class ServoController {
 private:
+
 	Servo servoMotor;
 	int servoPos = 0;
 	int servoMoveCount = 0;
@@ -24,6 +21,7 @@ private:
 	int setupServoPosMax = 2400;
 	Ticker TickerServo;
 
+  	bool ehParaMovimentarServo = false;
 	
 	void setServoTimer(bool newStatus){
 		setServoTimer(newStatus, .5);
@@ -31,8 +29,11 @@ private:
 	void setServoTimer(bool newStatus, float seconds){
 		TickerServo.detach();
 		if ( newStatus ){
-			TickerServo.once(1,marcarParaMovimentarServo);
-			Serial.println("Servo agendado....");
+			TickerServo.once(1, [this]() { 
+				ehParaMovimentarServo = true;
+				DEBUG_SERVOCONTROLL_PRINTLN("Chamou ehParaMovimentarServo...");
+			 });
+			DEBUG_SERVOCONTROLL_PRINTLN("Servo agendado....");
 		}
 	}
 
@@ -40,14 +41,14 @@ protected:
 	
 public:
 	void printStatus(){
-		Serial.println(" servoPos: " + String(servoPos));
-		Serial.println(" servoMoveCount: " + String(servoMoveCount));
-		Serial.println(" maxServoMoveCount: " + String(maxServoMoveCount));
-		Serial.println(" servoPin: " + String(servoPin));
-		Serial.println(" servoAnguloAberto: " + String(servoAnguloAberto));
-		Serial.println(" servoAnguloFechado: " + String(servoAnguloFechado));
-		Serial.println(" isMoving: " + String(isMoving()));
-		Serial.println(" -- Servo OK --");
+		Serial.println(" servoPos: " + String(servoPos) +
+						"\n servoMoveCount: " + String(servoMoveCount) +
+						"\n maxServoMoveCount: " + String(maxServoMoveCount) +
+						"\n servoPin: " + String(servoPin) +
+						"\n servoAnguloAberto: " + String(servoAnguloAberto) +
+						"\n servoAnguloFechado: " + String(servoAnguloFechado) +
+						"\n isMoving: " + String(isMoving()) +
+						"\n -- Servo OK --");
 	}
 	ServoController(
 		unsigned int _servoPin, 
@@ -72,16 +73,12 @@ public:
 
 	
 	void resetMoveCount(){
-		Serial.println("ResertMoveCount invocado...");
+		DEBUG_SERVOCONTROLL_PRINTLN("ResertMoveCount invocado...");
 		if ( ! isMoving()  ){
 			servoMoveCount = 0;
 			setServoTimer(true);
 		}
-		else{
-			Serial.println(" servoMoveCount: " + String(servoMoveCount));
-			Serial.println(" maxServoMoveCount: " + String(maxServoMoveCount));
-			Serial.println(" isMoving: " + String(isMoving()));
-		}
+		
 	}
 
 	void open(){
@@ -106,21 +103,20 @@ public:
 			setServoTimer(true);
 		}
 	}
-	void update(){
+	void loop(){
 		if ( isMoving() ){
-			if (! ServoController__ehParaMovimentarServo ){
+			if (! ehParaMovimentarServo ){
 				return;
 			}
-			Serial.println("Update is moving...");
-			ServoController__ehParaMovimentarServo = false;
+			DEBUG_SERVOCONTROLL_PRINTLN("Update is moving...");
+			ehParaMovimentarServo = false;
 			if (! servoMotor.attached() ){
 				servoMotor.attach(servoPin, setupServoPosMin, setupServoPosMax);
-				Serial.println("Servo conectado");
+				DEBUG_SERVOCONTROLL_PRINTLN("Servo conectado");
 			}
-			int posAntiga = servoMotor.read();
-			int novaPosicao = servoPos;
-			Serial.println("- Movendo servo de " + String(posAntiga) + " para " + String(novaPosicao) + " id = " + String(servoMoveCount));
-			servoMotor.write(novaPosicao);
+			
+			DEBUG_SERVOCONTROLL_PRINTLN("- Movendo servo de " + String(servoMotor.read()) + " para " + String(servoPos) + " id = " + String(servoMoveCount));
+			servoMotor.write(servoPos);
 			if ( isMoving() ){
 				servoPos = (servoPos == servoAnguloAberto) ? servoAnguloFechado : servoAnguloAberto;
 			}
