@@ -7,7 +7,7 @@
 #include <Adafruit_SSD1306.h>
 
 
-class MeuDisplay {
+class Tela {
   private:
 //  SCL GPIO 5 (D1)
 // SDA  GPIO 4 (D2)
@@ -16,9 +16,9 @@ class MeuDisplay {
     // Declaration for an SSD1306 display connected to I2C (SDA, SCL pins)
     const int OLED_RESET = -1; // Reset pin # (or -1 if sharing Arduino reset pin)
 //    ADDRESS = 0x3c;
-    Adafruit_SSD1306* display;
- 
+	bool online =false;
   public: 
+    Adafruit_SSD1306* display;
     bool setup(){
       display = new Adafruit_SSD1306(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
     //  i2c.setup(0, SDA, SCL, i2c.SLOW)
@@ -36,25 +36,56 @@ class MeuDisplay {
       // }
       
       // initialize with the I2C addr 0x3C
-      bool ok = display->begin(SSD1306_SWITCHCAPVCC, 0x3C);  
-      if ( ok )
-      {
-        
-      // Clear the buffer.
-        display->clearDisplay();
+      online = display->begin(SSD1306_SWITCHCAPVCC, 0x3C);  
 
-        // Display Text "Hello Word"
-        display->clearDisplay();
-        display->setTextSize(1);
-        display->setTextColor(WHITE);
-        display->setCursor(0,28);
-        display->println("Projeto Nemo");
-        display->display();
+      if ( online )
+      {
+		for( int i= 0; i< 4; i++){
+			display->setRotation(i);
+			show("Carregando Projeto Nemo");
+			delay(500);
+		}
+		display->setRotation(2);
+		show("Projeto Nemo - Tela OK");
+		delay(1000);
       } else {
          Serial.println(F("SSD1306 allocation failed"));
       }
-      return ok;
+      return online;
     }
+	bool isOnline(){
+		return online;
+	}
+	void clearDisplay(){
+		display->clearDisplay();
+	}
+	void mostrar(){
+		 display->setTextSize(1);
+        display->setTextColor(WHITE);
+        display->setCursor(0,3);
+		display->display();
+	}
+	void linha(){
+		display->drawFastHLine(0, display->getCursorY(), display->width(), WHITE);
+		display->println();
+		
+	}
+	void print(String msg){
+		display->print(msg);
+	}
+	void println(String msg){
+		display->println(msg);
+	}
+	void show(String msg){
+		// Clear the buffer.
+        display->clearDisplay();
+		//display->setRotation(180);
+        display->setTextSize(1);
+        display->setTextColor(WHITE);
+        display->setCursor(0,3);
+        display->println(msg);
+        display->display();
+	}
 };
 
 #endif

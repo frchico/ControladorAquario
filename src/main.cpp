@@ -1,6 +1,6 @@
 #include <Servo.h>
 
-
+void DEBUG_PROGRAM_PRINTLN(String x);
 
 #ifndef STASSID
 #define STASSID ""
@@ -203,9 +203,9 @@ void checkSensorTemperatura(){
 void setupSensorTemperatura(){
 	sensors.begin(); // Inicializa o sensor DS18B20
 	
-	Serial.println("Carregando sensores de temperatura...");
+	DEBUG_PROGRAM_PRINTLN("Carregando sensores de temperatura...");
 	checkSensorTemperatura();
-	Serial.println("Fim da carga dos sensores de temperatura.");
+	DEBUG_PROGRAM_PRINTLN("Fim da carga dos sensores de temperatura.");
 	temperaturaTicker.attach(tempoLeituraTemperatura, marcarParaLerTemperatura);
 	delay(1000);
 	ehParaLerTemperatura = true;
@@ -225,11 +225,14 @@ void setupAlexa(){
 bool setupWifi(){
 	//WiFiManager, Local intialization. Once its business is done, there is no need to keep it around
 
-
+	uint16 totalPassos = 3;
+	DEBUG_PROGRAM_PRINTLN("Carregando WI-FI (1/" + String(totalPassos) + ")");
 
     AsyncWiFiManager wm(&server,&dns);
 
 	char buffer[10];
+
+	DEBUG_PROGRAM_PRINTLN("Carregando WI-FI (2/" + String(totalPassos) + ")");
 
 	AsyncWiFiManagerParameter custom_servo_min_param("SMin", "Alimentador Fechado", itoa(posGavetaFechada, buffer,10), 3);
 	wm.addParameter(&custom_servo_min_param);
@@ -250,21 +253,23 @@ bool setupWifi(){
     // if empty will auto generate SSID, if password is blank it will be anonymous AP (wm.autoConnect())
     // then goes into a blocking loop awaiting configuration and will return success result
 
+	DEBUG_PROGRAM_PRINTLN("Carregando WI-FI (3/" + String(totalPassos) + " - Tentando conectar em [" + wm.getConfigPortalSSID() + "])");
+
     bool res;
     // res = wm.autoConnect(); // auto generated AP name from chipid
     // res = wm.autoConnect("AutoConnectAP"); // anonymous ap
     res = wm.autoConnect("AutoConnectAP","12345678"); // password protected ap
-
+	
     if(!res) {
-        Serial.println("Failed to connect");
+        DEBUG_PROGRAM_PRINTLN("Failed to connect WI-FI " + wm.getConfiguredSTASSID());
         // ESP.restart();
     } 
     else {
 
+
         //if you get here you have connected to the WiFi    
-        Serial.println("connected...yeey :)");
-		Serial.print("IP Address: ");
-  		Serial.println(WiFi.localIP());
+        DEBUG_PROGRAM_PRINTLN("connected...yeey :)");
+		DEBUG_PROGRAM_PRINTLN("IP Address: " + WiFi.localIP().toString());
 		server.begin();
 		posGavetaFechada = atoi(custom_servo_min_param.getValue());
 		posGavetaAberta = atoi(custom_servo_max_param.getValue());
@@ -287,7 +292,7 @@ bool setupWifi(){
   Serial.print("IP address: ");
   Serial.println(WiFi.localIP());
 */
-	return true;
+	return res;
 	
 }
 void setupServo(){
@@ -386,14 +391,19 @@ void setupEspDash(){
 
 void setupEasyButton(){
 
+	DEBUG_PROGRAM_PRINTLN("Identificando botões...");
 	buttonAlimentarPeixes = new EasyButton(pinButtonAlimentar);
 	buttonAlimentarPeixes->begin();
 
 	// Attach callback.
 	buttonAlimentarPeixes->onSequence(pressesButton, timeoutButton, onSequenceFactoryButtonMatched);
 	buttonAlimentarPeixes->onPressedFor(2000, onPressedForDuration);
+	DEBUG_PROGRAM_PRINTLN("Botões carregados...");
+	delay(1000);
+
 }
 void setupLeds(){
+	DEBUG_PROGRAM_PRINTLN("Inicializando leds...");
 	pinMode(LedAlimentarPIN, OUTPUT);
 	pinMode(ledPinVerde, OUTPUT);
 
@@ -406,47 +416,107 @@ void setupLeds(){
 	Serial.println("LED = LOW");
 	digitalWrite(ledPinVerde, LOW);
 	digitalWrite(LedAlimentarPIN, LOW);
+	DEBUG_PROGRAM_PRINTLN("Leds carregados...");
 	delay(1000);
+	
 }
 
-void setup() {
-
-	Serial.begin(115200);
-    
-	setupLeds();
-	setupSensorTemperatura();
-	setupEasyButton();
-
-    if ( setupWifi() ){	
-		Serial.println("Setup HTTP SERVER");
-		setuHttpServer();
-		Serial.println("setupServo");
-		setupServo();
-		Serial.println("setupAlexa");
-	
-		setupAlexa();
-		Serial.println("setupEspDash");
-		setupEspDash();
-		Serial.println(":::::::: ESP Pronto :::::::: "); 
-	} else {
-		Serial.println(":::::::: ESP SEM RECURSO WIFI :::::::: "); 
-	}
-	
- 	 	
-}
+float temperatureC = 0;
 void obterTemperatura(){
 	if(ehParaLerTemperatura){
 		ehParaLerTemperatura = false;
 		sensors.requestTemperatures(); // Solicita a leitura da temperatura
 
 		// Lê e imprime a temperatura em graus Celsius
-		float temperatureC = sensors.getTempCByIndex(0);
 		Serial.print("Temperatura: ");
 		Serial.print(temperatureC);
 		Serial.println(" °C");
+		temperatureC = sensors.getTempCByIndex(0);
 		temperaturaCard.update(temperatureC);
 	}
 }
+#include <Tela.h>
+Tela tela;
+void setupDisplay(){
+	tela.setup();
+	
+}
+
+#include <Relogio.h>
+Relogio relogio;
+Ticker relogioTicker;
+bool ehParaExibirRelogio = false;
+void marcarParaExibirRelogioNaTela(){
+	ehParaExibirRelogio = true;
+}
+String ultimaDataHora;
+void atualizarTela(){
+
+	if ( ehParaExibirRelogio ){
+		ehParaExibirRelogio = false;
+		ultimaDataHora = relogio.formatarDataHora();
+	}
+	tela.clearDisplay();
+	tela.println(ultimaDataHora);
+	tela.linha();
+	tela.print("Temp: ");
+	tela.println(String(temperatureC));
+	tela.linha();
+	tela.print("IP: ");
+	tela.display->println(WiFi.localIP());
+	tela.mostrar();
+}
+
+void setupRelogio(){
+	relogio.setup();
+	relogio.updateTime();
+	ehParaExibirRelogio = true;
+	if (tela.isOnline()){
+		relogioTicker.attach(min(tempoLeituraTemperatura, 10), marcarParaExibirRelogioNaTela);
+	}
+}
+
+
+void DEBUG_PROGRAM_PRINTLN(String x) { 
+	
+	Serial.println(x);
+	if ( tela.isOnline() ){
+		tela.show(x);
+	}
+}
+
+
+void setup() {
+
+	Serial.begin(115200);
+	setupDisplay();
+	setupLeds();
+	setupSensorTemperatura();
+	setupEasyButton();
+
+    if ( setupWifi() ){	
+		DEBUG_PROGRAM_PRINTLN("Load HTTP SERVER...");
+		setuHttpServer();
+
+		
+		DEBUG_PROGRAM_PRINTLN("Load Relogio...");
+		setupRelogio();
+		
+		DEBUG_PROGRAM_PRINTLN("Load Servo...");
+		setupServo();
+		DEBUG_PROGRAM_PRINTLN("Load Alexa...");
+	
+		setupAlexa();
+		DEBUG_PROGRAM_PRINTLN("Load EspDash...");
+		setupEspDash();
+		DEBUG_PROGRAM_PRINTLN(":::::::: ESP Pronto :::::::: "); 
+	} else {
+		DEBUG_PROGRAM_PRINTLN(":::::::: ESP SEM RECURSO WIFI :::::::: "); 
+	}
+	
+ 	 	
+}
+
 
 void meuLoop(){
 	// Piscar o LED sempre que o servo estiver se movendo
@@ -463,6 +533,7 @@ void meuLoop(){
 		}
 	}
 	obterTemperatura();
+	atualizarTela();
 
 }
 void loop() {
