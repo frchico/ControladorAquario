@@ -4,7 +4,7 @@
 #ifdef DEBUG_SERVOCONTROLL
 	#define DEBUG_SERVOCONTROLL_PRINTLN(x) Serial.println(x)
 #else
-	#define DEBUG_SERVOCONTROLL_PRINTLN(x)
+	#define DEBUG_SERVOCONTROLL_PRINTLN(x) 
 #endif
 
 class ServoController {

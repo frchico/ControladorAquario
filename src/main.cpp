@@ -1,5 +1,14 @@
-#include <ESP8266WiFi.h>
 #include <Servo.h>
+
+
+
+#ifndef STASSID
+#define STASSID ""
+#define STAPSK ""
+#endif
+
+const char* ssid = STASSID;
+const char* password = STAPSK;
 
 
 #ifdef ARDUINO_ARCH_ESP32
@@ -32,14 +41,14 @@ int qtdVezesParaAlimentar = 2;
 
 #include <ServoController.h>
 //ServoController servoController(D5, qtdVezesParaAlimentar, posGavetaAberta, posGavetaFechada); // Instância do ServoController
-ServoController *servoController; 
+ServoController* servoController; 
 
 
 
 // #include <Ticker.h>
 //Ticker ledTicker;
 const int pinDS18B20 =D7; // Pino onde o DS18B20 está conectado
-
+const int pinServo = D5;
 const int LedAlimentarPIN = LED_BUILTIN; // Ligado no pino D4 do wemos d1 r1 //5;// LED_BUILTIN; // Pino do LED do ESP8266
 const int ledPinVerde = 4;
 bool ledState = false;
@@ -154,7 +163,7 @@ DallasTemperature sensors(&oneWire);
 Ticker temperaturaTicker;
 bool ehParaLerTemperatura = false;
 bool ehParaDeixarLedLigado = false;
-int tempoLeituraTemperatura = 5; //tempo em segundos
+int tempoLeituraTemperatura = 30; //tempo em segundos
 void marcarParaLerTemperatura(){
 	ehParaLerTemperatura = true;
 }
@@ -199,6 +208,7 @@ void setupSensorTemperatura(){
 	Serial.println("Fim da carga dos sensores de temperatura.");
 	temperaturaTicker.attach(tempoLeituraTemperatura, marcarParaLerTemperatura);
 	delay(1000);
+	ehParaLerTemperatura = true;
 }
 void setupAlexa(){
 	espalexa.begin(&server); //give espalexa a pointer to your server object so it can use your server instead of creating its own
@@ -214,6 +224,9 @@ void setupAlexa(){
 }
 bool setupWifi(){
 	//WiFiManager, Local intialization. Once its business is done, there is no need to keep it around
+
+
+
     AsyncWiFiManager wm(&server,&dns);
 
 	char buffer[10];
@@ -224,13 +237,13 @@ bool setupWifi(){
 	AsyncWiFiManagerParameter custom_servo_max_param("SMax", "Alimentador Aberto", itoa(posGavetaAberta, buffer,10), 3);
 	wm.addParameter(&custom_servo_max_param);
 
-	AsyncWiFiManagerParameter custom_qtd_vezes_alimentar("SV", "Quantas Vezes", itoa(qtdVezesParaAlimentar, buffer,10), 3);
+	AsyncWiFiManagerParameter custom_qtd_vezes_alimentar("SVezes", "Quantas Vezes", itoa(qtdVezesParaAlimentar, buffer,10), 3);
 	wm.addParameter(&custom_qtd_vezes_alimentar);
 
 
     // reset settings - wipe stored credentials for testing
     // these are stored by the esp library
-    // wm.resetSettings();
+    //wm.resetSettings();
 
     // Automatically connect using saved credentials,
     // if connection fails, it starts an access point with the specified name ( "AutoConnectAP"),
@@ -258,11 +271,27 @@ bool setupWifi(){
 		qtdVezesParaAlimentar = atoi(custom_qtd_vezes_alimentar.getValue());
 		
 	}
-	return res;
+	/*
+	WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
+  Serial.println("");
+
+  // Wait for connection
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("");
+  Serial.print("Connected to ");
+  Serial.println(ssid);
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP());
+*/
+	return true;
 	
 }
 void setupServo(){
-	servoController = new ServoController(D5, qtdVezesParaAlimentar, posGavetaAberta, posGavetaFechada); // Instância do ServoController
+	servoController = new ServoController(pinServo, qtdVezesParaAlimentar, posGavetaAberta, posGavetaFechada); // Instância do ServoController
 
 }
 void setupEspDash(){
@@ -379,6 +408,7 @@ void setupLeds(){
 	digitalWrite(LedAlimentarPIN, LOW);
 	delay(1000);
 }
+
 void setup() {
 
 	Serial.begin(115200);
@@ -388,8 +418,14 @@ void setup() {
 	setupEasyButton();
 
     if ( setupWifi() ){	
+		Serial.println("Setup HTTP SERVER");
 		setuHttpServer();
+		Serial.println("setupServo");
+		setupServo();
+		Serial.println("setupAlexa");
+	
 		setupAlexa();
+		Serial.println("setupEspDash");
 		setupEspDash();
 		Serial.println(":::::::: ESP Pronto :::::::: "); 
 	} else {
@@ -431,7 +467,7 @@ void meuLoop(){
 }
 void loop() {
 	meuLoop();
-	dashboard.sendUpdates();
+	//dashboard.sendUpdates();
  	servoController->loop(); // Atualiza o controle do servo
 	espalexa.loop();
 	buttonAlimentarPeixes->read();
