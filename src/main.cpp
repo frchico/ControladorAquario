@@ -163,7 +163,7 @@ DallasTemperature sensors(&oneWire);
 Ticker temperaturaTicker;
 bool ehParaLerTemperatura = false;
 bool ehParaDeixarLedLigado = false;
-int tempoLeituraTemperatura = 30; //tempo em segundos
+ushort tempoLeituraTemperatura = 30; //tempo em segundos
 void marcarParaLerTemperatura(){
 	ehParaLerTemperatura = true;
 }
@@ -466,13 +466,13 @@ void atualizarTela(){
 	tela.display->println(WiFi.localIP());
 	tela.mostrar();
 }
-
+ushort tempoAtualizarRelogio = 1;
 void setupRelogio(){
 	relogio.setup();
 	relogio.updateTime();
 	ehParaExibirRelogio = true;
 	if (tela.isOnline()){
-		relogioTicker.attach(min(tempoLeituraTemperatura, 10), marcarParaExibirRelogioNaTela);
+		relogioTicker.attach(min(tempoLeituraTemperatura, tempoAtualizarRelogio), marcarParaExibirRelogioNaTela);
 	}
 }
 
