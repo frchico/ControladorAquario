@@ -1,91 +1,82 @@
-#ifndef MEU__DISPLAY_CONTROL_H
-#define MEU__DISPLAY_CONTROL_H
+#ifndef TELA_H
+#define TELA_H
 
-#include <SPI.h>
-#include <Wire.h>
-#include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h>
+#include <SSD1306Wire.h>
+#include <OLEDDisplayUi.h>
 
+
+
+#include <vector> // Adicione essa linha para utilizar std::vector
+#include <functional> // Adicione essa linha para utilizar std::function
+
+#include <Ticker.h>
+
+#define I2C_DISPLAY_DEVICE  1
 
 class Tela {
-  private:
-//  SCL GPIO 5 (D1)
-// SDA  GPIO 4 (D2)
-    const byte SCREEN_WIDTH = 128; // OLED display width, in pixels
-    const byte SCREEN_HEIGHT = 64; // OLED display height, in pixels
-    // Declaration for an SSD1306 display connected to I2C (SDA, SCL pins)
-    const int OLED_RESET = -1; // Reset pin # (or -1 if sharing Arduino reset pin)
-//    ADDRESS = 0x3c;
-	bool online =false;
-  public: 
-    Adafruit_SSD1306* display;
-    bool setup(){
-      display = new Adafruit_SSD1306(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
-    //  i2c.setup(0, SDA, SCL, i2c.SLOW)
-      // if ( u8g.getMode() == U8G_MODE_R3G3B2 ) {
-      //  u8g.setColorIndex(255);     // white
-      // }
-      // else if ( u8g.getMode() == U8G_MODE_GRAY2BIT ) {
-      //  u8g.setColorIndex(3);         // max intensity
-      // }
-      // else if ( u8g.getMode() == U8G_MODE_BW ) {
-      //  u8g.setColorIndex(1);         // pixel on
-      // }
-      // else if ( u8g.getMode() == U8G_MODE_HICOLOR ) {
-      //  u8g.setHiColorByRGB(255,255,255);
-      // }
-      
-      // initialize with the I2C addr 0x3C
-      online = display->begin(SSD1306_SWITCHCAPVCC, 0x3C);  
+public:
+    SSD1306Wire display;
+    OLEDDisplayUi* ui;
 
-      if ( online )
-      {
-		for( int i= 0; i< 4; i++){
-			display->setRotation(i);
-			show("Carregando Projeto Nemo");
-			delay(500);
-		}
-		display->setRotation(2);
-		show("Projeto Nemo - Tela OK");
-		delay(1000);
-      } else {
-         Serial.println(F("SSD1306 allocation failed"));
-      }
-      return online;
-    }
-	bool isOnline(){
-		return online;
-	}
-	void clearDisplay(){
-		display->clearDisplay();
-	}
-	void mostrar(){
-		 display->setTextSize(1);
-        display->setTextColor(WHITE);
-        display->setCursor(0,3);
-		display->display();
-	}
-	void linha(){
-		display->drawFastHLine(0, display->getCursorY(), display->width(), WHITE);
-		display->println();
-		
-	}
-	void print(String msg){
-		display->print(msg);
-	}
-	void println(String msg){
-		display->println(msg);
-	}
-	void show(String msg){
-		// Clear the buffer.
-        display->clearDisplay();
-		//display->setRotation(180);
-        display->setTextSize(1);
-        display->setTextColor(WHITE);
-        display->setCursor(0,3);
-        display->println(msg);
-        display->display();
-	}
+
+    Tela();
+	
+	bool init();
+
+    void exibirTexto(const String& texto);
+    void atualizar();
+    void exibirBarraProgresso(int progresso, const String& label);
+
+	void drawProgress(OLEDDisplay *display, int percentage, String labeltop, String labelbot);
+	void drawProgress(OLEDDisplay *display, int percentage, String labeltop );
+
+	bool hasDisplay();
+
+	void addFrameCallback(FrameCallback frame);
+	void addOverlayCallback(OverlayCallback  overlay);
+
+	void loop();
+
+	void drawTelaConnectando();
+	void mostrarConnectando(bool mostrar, const String& msg ="");
+
+private:
+	Ticker* relogioTicker;
+
+	bool has_display = false;
+	bool readyForUpdate = false;
+
+	String mensagemConexao = "";
+	bool ehParaExibirMensagemConexao = false;
+
+	// Defina a duração de cada frame em milissegundos
+	const unsigned int FRAME_DURATION = 5000; // 2 segundos
+	// Defina um temporizador e uma variável para rastrear o tempo de cada frame
+	unsigned long lastFrameTime = 0;
+	const unsigned long tempoIndex0 =  3* 1* 1000;
+	int currentFrameIndex = 0;
+	unsigned long updateFrame();
+
+	char i2c_dev[I2C_DISPLAY_DEVICE][32]; // Array on string displayed
+	uint8_t i2c_scan(uint8_t address = 0xff);
+
+
+	std::vector<FrameCallback> frameCallbacks;
+
+	//static void staticFrameCallback(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y);
+
+	// Vetor para armazenar os overlays
+    std::vector<OverlayCallback> overlays;
+
+    // Função estática para ser usada como Overlay
+   // static void staticHeaderOverlay(OLEDDisplay *display, OLEDDisplayUiState* state);
+
+    // Funções para desenhar overlays
+    static void drawHeaderOverlay(OLEDDisplay *display, OLEDDisplayUiState* state);
+	
+
 };
 
-#endif
+
+
+#endif // TELA_H
