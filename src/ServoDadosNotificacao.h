@@ -1,5 +1,6 @@
 #pragma once
 
+#include <DadosNotificacao.h>
 class ServoDadosNotificacao : public DadosNotificacao {
 public:
     unsigned int posicaoAnterior = 0;
@@ -10,8 +11,8 @@ public:
 
 	ServoDadosNotificacao(const char* msg) : DadosNotificacao(TipoNotificacao::Servo, msg){
 	}
-
-	bool alimentacaoFinalizada(){
+	bool alimentacaoEstahFinalizada(){
 		return nroMovimento == nroMovimentoTotais; 
 	}
+	
 };

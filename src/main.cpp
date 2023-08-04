@@ -39,14 +39,15 @@ void setupServoController(){
 	observadorServo = new Observador();
 	servo = new ServoController(config.pinServo, config.qtdVezesParaAlimentar, config.posGavetaAberta, config.posGavetaFechada);
 	servo->addObserver(observadorServo);
+	servo->addObserver(tela);
 }
 void mostrarTelaConexao(){
 	Serial.print("Counter ");
   	Serial.println(relogio.counter());
-	if ( relogio.counter() % 10 == 0){
+	if ( relogio.counter() % 20 == 0){
 		servo->alimentarPeixes();
 	} else if ( relogio.counter() % 20 == 0){
-		tela->mostrarConnectando(situacao);
+		//tela->mostrarConnectando(situacao);
 		situacao = !situacao;
 	}
 }
@@ -55,11 +56,11 @@ void mostrarTelaConexao(){
 void drawCurrentWeather(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y) {
   tela->display.setFont(ArialMT_Plain_10);
   tela->display.setTextAlignment(TEXT_ALIGN_CENTER);
-  tela->display.drawString(64 + x, 38 + y, "Tempo hoje");
+  tela->display.drawString(64 + x, 38 + y, "Tela 1");
 
   tela->display.setFont(ArialMT_Plain_24);
   tela->display.setTextAlignment(TEXT_ALIGN_LEFT);
-  String temp = "30 °C";
+  String temp = "15 °C";
   tela->display.drawString(60 + x, 5 + y, temp);
 
   tela->display.setTextAlignment(TEXT_ALIGN_CENTER);
@@ -69,7 +70,7 @@ void drawCurrentWeather(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t
 void drawTela2(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y) {
   tela->display.setFont(ArialMT_Plain_10);
   tela->display.setTextAlignment(TEXT_ALIGN_CENTER);
-  tela->display.drawString(64 + x, 38 + y, "Tempo hoje");
+  tela->display.drawString(64 + x, 38 + y, "Tela 2");
 
   tela->display.setFont(ArialMT_Plain_24);
   tela->display.setTextAlignment(TEXT_ALIGN_LEFT);
@@ -111,8 +112,9 @@ void setup() {
 	setupDisplay();
 	setupServoController();
 	tela->mostrarConnectando(true, "WIFIEIAS");	
+	delay(2500);
 	relogio.start();
-
+	tela->mostrarConnectando(false, "WIFIEIAS");	
 	DEBUG_PROGRAM_PRINTLN("Setup OK\n");
 	
 }

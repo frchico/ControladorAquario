@@ -27,6 +27,6 @@ public:
         Serial.print("] - ");
         Serial.print(dados.nroMovimento);
         Serial.print(" / ");
-        Serial.print(dados.nroMovimentoTotais);
+        Serial.println(dados.nroMovimentoTotais);
     }
 };

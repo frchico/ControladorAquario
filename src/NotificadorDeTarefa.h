@@ -11,8 +11,10 @@ private:
 
 public:
     void addObserver(IObservador<T>* observador) {
-        observadores.push_back(observador);
-    }
+		if( observador ){
+        	observadores.push_back(observador);
+    	}
+	}
 
     void notificar(const T& dados) {
         for (IObservador<T>* observador : observadores) {

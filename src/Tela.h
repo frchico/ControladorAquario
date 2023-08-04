@@ -5,21 +5,26 @@
 
 #include <SSD1306Wire.h>
 #include <OLEDDisplayUi.h>
-
-
-
+#include <Observador.h>
+#include <DadosNotificacao.h>
+#include <ServoDadosNotificacao.h>
 #include <vector> // Adicione essa linha para utilizar std::vector
 #include <functional> // Adicione essa linha para utilizar std::function
 
 #include <Ticker.h>
 
 #define I2C_DISPLAY_DEVICE  1
+enum TipoExibicaoTela {
+	Carrocel,
+	Fixa
+};
 
-class Tela {
+class Tela : public IObservador<ServoDadosNotificacao> {
 public:
     SSD1306Wire display;
     OLEDDisplayUi* ui;
 
+	TipoExibicaoTela tipoExibicaoTela = TipoExibicaoTela::Carrocel;
 
     Tela();
 	
@@ -41,6 +46,9 @@ public:
 
 	void drawTelaConnectando();
 	void mostrarConnectando(bool mostrar, const String& msg ="");
+
+	
+   
 
 private:
 	Ticker* relogioTicker;
@@ -76,6 +84,13 @@ private:
     // Funções para desenhar overlays
     static void drawHeaderOverlay(OLEDDisplay *display, OLEDDisplayUiState* state);
 	
+	// Função para imprimir os valores observados na tela
+	void onReceberNotificacao(const ServoDadosNotificacao& dados) override;
+
+
+	void habilitarDesenhoTelaFixa(bool habilitar);
+	void exibiDadosServo(const ServoDadosNotificacao& dados);
+
 
 };
 

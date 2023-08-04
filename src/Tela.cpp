@@ -44,9 +44,6 @@ bool Tela::init(){
 	
 		ui->init();
 
-		
-		relogioTicker = new Ticker([this](){this->drawTelaConnectando();}, 500, 0, MILLIS);
-		relogioTicker->stop();
 		return true;
 	}
 	return false;
@@ -80,9 +77,6 @@ void Tela::exibirTexto(const String& texto) {
     display.display();
 }
 
-void Tela::atualizar() {
-    ui->update();
-}
 
 void Tela::exibirBarraProgresso(int progresso, const String& label) {
 
@@ -150,7 +144,8 @@ void Tela::loop()
 
 	if (has_display) {
 
-		if ( ehParaExibirMensagemConexao ){
+		if ( ehParaExibirMensagemConexao  || tipoExibicaoTela == TipoExibicaoTela::Fixa){
+			Serial.println("Fixa");
 			//drawTelaConnectando();
 			return;
 		}
@@ -163,7 +158,7 @@ void Tela::loop()
 
 
 		int remainingTimeBudget = ui->update();
-
+		Serial.println("chamou ui");
 		if (remainingTimeBudget > 0) {
 			// You can do some work here
 			// Don't do stuff if you are below your
@@ -305,12 +300,26 @@ void Tela::drawProgress(OLEDDisplay *display, int percentage, String labeltop ) 
 void Tela::mostrarConnectando(bool mostrar, const String& msg){
 	mensagemConexao = msg;
 	ehParaExibirMensagemConexao = mostrar;
-	if ( mostrar ) { relogioTicker->resume(); } else { relogioTicker->stop();}
-
+	if ( mostrar ) { 
+		relogioTicker = new Ticker([this](){this->drawTelaConnectando();}, 500, 0, MILLIS);
+	}
+	habilitarDesenhoTelaFixa(mostrar);
 }
 
+void Tela::habilitarDesenhoTelaFixa(bool habilitar){
+	if ( habilitar) {
+		tipoExibicaoTela = TipoExibicaoTela::Fixa;
+		ui->disableAutoTransition();
+		relogioTicker->resume(); 
+	} else { 
+		relogioTicker->stop();
+		tipoExibicaoTela = TipoExibicaoTela::Carrocel;
+		ui->enableAutoTransition();
+		ui->update();
+	}
+}
 void Tela::drawTelaConnectando(){
-	if ( ! has_display && ! ehParaExibirMensagemConexao ){
+	if ( ! has_display ){
 		return;
 	}
 	uint32_t counter = relogioTicker->counter();
@@ -325,4 +334,26 @@ void Tela::drawTelaConnectando(){
 	mensagemConexao = String (counter) + " | " + String(counter % 3);
 	display.drawString(64, 45, mensagemConexao );
 	display.display();
+}
+
+
+void Tela::exibiDadosServo(const ServoDadosNotificacao& dados){
+	if ( ! has_display){
+		return;
+	}
+	int percentual = dados.nroMovimento * 100 / dados.nroMovimentoTotais;
+	String rodape = String(dados.nroMovimento) + " / " + String(dados.nroMovimentoTotais);
+	bool concluido = dados.status;
+	
+	if (concluido ){
+		percentual = 100;
+	}
+    this->drawProgress(&display, percentual, dados.mensagem, rodape);
+	this->habilitarDesenhoTelaFixa(!concluido);
+}
+
+// Função para imprimir os valores observados na tela
+void Tela::onReceberNotificacao(const ServoDadosNotificacao& dados) {
+	relogioTicker = new Ticker([this,dados](){this->exibiDadosServo(dados);}, 500, 1, MILLIS);
+	relogioTicker->start();
 }

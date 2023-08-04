@@ -20,7 +20,7 @@ ServoController::ServoController(unsigned int _servoPin,
 			DEBUG_SERVOCONTROLL_PRINTLN("Chamou ehParaMovimentarServo...");
 			},0,1);
 	TickerServo->stop();
-	TickerAlternarPosicao = new Ticker([this]() { this->alternarPosicao(); },1000*1 , maxServoMoveCount, MILLIS);
+	TickerAlternarPosicao = new Ticker([this]() { this->alternarPosicao(); },1500*1 , maxServoMoveCount, MILLIS);
 	TickerAlternarPosicao->stop();
 	podeAlimentarPeixes = true;
 }
@@ -60,10 +60,11 @@ void ServoController::alternarPosicao(){
 	DEBUG_SERVOCONTROLL_PRINTLN("Chamou write...");
     notificar(dadosServo);
 	
-	if ( TickerAlternarPosicao->counter() == servoMoveCount ){
+	if ( TickerAlternarPosicao->counter() == this->maxServoMoveCount ){
 		this->detach();
 		podeAlimentarPeixes = true;
 		dadosServo.mensagem = "Concluída";
+		dadosServo.status = true;
     	notificar(dadosServo);
 	}
 
