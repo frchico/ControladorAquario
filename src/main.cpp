@@ -1,8 +1,12 @@
 //#include <Servo.h>
 #include <Arduino.h>
 #include <Tela.h>
-
 #include <Ticker.h>
+#include <ServoController.h>
+#include <Configuracao.h>
+#include <Observador.h>
+#include <DadosNotificacao.h>
+#include <ServoDadosNotificacao.h>
 
 void DEBUG_PROGRAM_PRINTLN(String x);
 
@@ -22,10 +26,26 @@ Ticker relogio(mostrarTelaConexao, 1000, 0, MILLIS);
 
 bool situacao = true;
 
+Observador* observadorServo;
+
+// Função para imprimir os valores observados na tela
+void imprimirValores(const ServoDadosNotificacao& dados) {
+    Serial.println("Posição do Servo: " + String(dados.mensagem));
+}
+
+ServoController* servo;
+Configuracao config;
+void setupServoController(){
+	observadorServo = new Observador();
+	servo = new ServoController(config.pinServo, config.qtdVezesParaAlimentar, config.posGavetaAberta, config.posGavetaFechada);
+	servo->addObserver(observadorServo);
+}
 void mostrarTelaConexao(){
 	Serial.print("Counter ");
   	Serial.println(relogio.counter());
-	if ( relogio.counter() % 20 == 0){
+	if ( relogio.counter() % 10 == 0){
+		servo->alimentarPeixes();
+	} else if ( relogio.counter() % 20 == 0){
 		tela->mostrarConnectando(situacao);
 		situacao = !situacao;
 	}
@@ -89,6 +109,7 @@ void setup() {
 
 	Serial.begin(115200);
 	setupDisplay();
+	setupServoController();
 	tela->mostrarConnectando(true, "WIFIEIAS");	
 	relogio.start();
 
@@ -99,4 +120,5 @@ void setup() {
 void loop() {
 	tela->loop();
 	relogio.update();
+	servo->loop();
 }
