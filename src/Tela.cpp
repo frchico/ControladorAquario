@@ -1,7 +1,6 @@
 #include "Tela.h"
-#include "Images.h"
 
-
+#include <Images.h>
 #define I2C_DISPLAY_ADDRESS 0x3c
 
 Tela::Tela() : display(I2C_DISPLAY_ADDRESS, 4, 5) {
@@ -353,7 +352,12 @@ void Tela::exibiDadosServo(const ServoDadosNotificacao& dados){
 }
 
 // Função para imprimir os valores observados na tela
-void Tela::onReceberNotificacao(const ServoDadosNotificacao& dados) {
-	relogioTicker = new Ticker([this,dados](){this->exibiDadosServo(dados);}, 500, 1, MILLIS);
-	relogioTicker->start();
+void Tela::onReceberNotificacao(const DadosNotificacao& dados) {
+	if (dados.tipo == TipoNotificacao::Servo){
+		const ServoDadosNotificacao& servoDados = static_cast<const ServoDadosNotificacao&>(dados);
+		relogioTicker = new Ticker([this,servoDados](){
+			this->exibiDadosServo(servoDados);
+		}, 500, 1, MILLIS);
+		relogioTicker->start();
+	}
 }

@@ -8,6 +8,9 @@
 #include <DadosNotificacao.h>
 #include <ServoDadosNotificacao.h>
 
+
+#include <Rede.h>
+
 void DEBUG_PROGRAM_PRINTLN(String x);
 
 #ifndef STASSID
@@ -34,12 +37,14 @@ void imprimirValores(const ServoDadosNotificacao& dados) {
 }
 
 ServoController* servo;
-Configuracao config;
+Rede rede;
+Configuracao* config;
 void setupServoController(){
 	observadorServo = new Observador();
-	servo = new ServoController(config.pinServo, config.qtdVezesParaAlimentar, config.posGavetaAberta, config.posGavetaFechada);
-	servo->addObserver(observadorServo);
+	servo = new ServoController(config->pinServo, config->qtdVezesParaAlimentar, config->posGavetaAberta, config->posGavetaFechada);
+	//servo->addObserver(observadorServo);
 	servo->addObserver(tela);
+
 }
 void mostrarTelaConexao(){
 	Serial.print("Counter ");
@@ -98,7 +103,11 @@ void setupDisplay(){
 	tela->init();
 
 }
-
+bool setupRede(){
+	//rede.addObserver(tela);
+	config = rede.setup();
+	return config->connected;
+}
 void DEBUG_PROGRAM_PRINTLN(String x) { 
 	
 	Serial.println(x);
@@ -110,6 +119,7 @@ void setup() {
 
 	Serial.begin(115200);
 	setupDisplay();
+	
 	setupServoController();
 	tela->mostrarConnectando(true, "WIFIEIAS");	
 	delay(2500);

@@ -19,7 +19,7 @@ enum TipoExibicaoTela {
 	Fixa
 };
 
-class Tela : public IObservador<ServoDadosNotificacao> {
+class Tela : public IObservador<DadosNotificacao> {
 public:
     SSD1306Wire display;
     OLEDDisplayUi* ui;
@@ -48,6 +48,9 @@ public:
 	void mostrarConnectando(bool mostrar, const String& msg ="");
 
 	
+	// Função para imprimir os valores observados na tela
+	void onReceberNotificacao(const DadosNotificacao& dados) override;
+
    
 
 private:
@@ -84,9 +87,6 @@ private:
     // Funções para desenhar overlays
     static void drawHeaderOverlay(OLEDDisplay *display, OLEDDisplayUiState* state);
 	
-	// Função para imprimir os valores observados na tela
-	void onReceberNotificacao(const ServoDadosNotificacao& dados) override;
-
 
 	void habilitarDesenhoTelaFixa(bool habilitar);
 	void exibiDadosServo(const ServoDadosNotificacao& dados);

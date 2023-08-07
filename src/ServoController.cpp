@@ -82,7 +82,6 @@ void ServoController::onReceberNotificacao(const DadosNotificacao& dados) {
                 alimentarPeixes();
                 break;
             default:
-                Serial.println("Ação desconhecida");
                 break;
         }
     } else {
