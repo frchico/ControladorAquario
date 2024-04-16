@@ -26,8 +26,6 @@ const char* password = STAPSK;
 AsyncWebServer server(80);
 DNSServer dns;
 
-#include <ESPDash.h>
-ESPDash dashboard(&server);
 
 #define ESPALEXA_ASYNC //it is important to define this before #include <Espalexa.h>!
 #include <Espalexa.h>
@@ -39,11 +37,16 @@ int posGavetaFechada = 43;
 int qtdVezesParaAlimentar = 2;
 
 
+bool ehParaAlimentarPorIntervaloTempo = true;
+ushort intervaloAlimentacao = 60* 60 * 4 ; // 6 hr em segundos = 6 * 60 * 60  
+ulong ultimaAlimentacao = 0;
+
 #include <ServoController.h>
 //ServoController servoController(D5, qtdVezesParaAlimentar, posGavetaAberta, posGavetaFechada); // Instância do ServoController
 ServoController* servoController; 
 
 
+#include <Relogio.h>
 
 // #include <Ticker.h>
 //Ticker ledTicker;
@@ -52,8 +55,14 @@ const int pinServo = D5;
 const int LedAlimentarPIN = LED_BUILTIN; // Ligado no pino D4 do wemos d1 r1 //5;// LED_BUILTIN; // Pino do LED do ESP8266
 const int ledPinVerde = 4;
 bool ledState = false;
+
+
 bool ehParaNotificarAlexaNoTermino = false;
 
+bool telaLigada = true;
+String ligadoDesde;
+
+float temperatureC = 0;
 
 #include <jled.h>
 // turn builtin LED on after 1 second.
@@ -87,56 +96,151 @@ void onPressedForDuration(){
 	servoController->checkConnections();	 
 }
 
+
 EspalexaDevice* alexaServoDevice;
+EspalexaDevice* alexaAquaModoAuto;
+
+
+
+Relogio relogio;
+
+bool ehParaExibirRelogio = false;
+
+
+void checkTimeParaAlimentar(){
+	if ( ehParaAlimentarPorIntervaloTempo ){
+		alimentarPeixes();
+	}
+	ultimaAlimentacao = millis();
+}
+Ticker alimentacaoTicker;
+
+
+/**
+ * Configura ou reinicia o tempo de alimentação.
+*/
+void setupAlimentarTicker(){
+	DEBUG_PROGRAM_PRINTLN("Configurando a alimentação automática baseada no tempo.");
+	ultimaAlimentacao = millis();
+	alimentacaoTicker.attach(intervaloAlimentacao, checkTimeParaAlimentar);
+	DEBUG_PROGRAM_PRINTLN("Ticker alimentação ativado...");
+
+}
 
 
 void alimentarPeixes(){
 	if ( ! servoController->isMoving() ){
 		//ledTicker.attach(0.5, toggleLed);
 		led.Reset();
-		alexaServoDevice->setValue(100);
+		alexaServoDevice->setPercent(100);
 		ehParaNotificarAlexaNoTermino = true;
 		servoController->resetMoveCount();
+		ultimaAlimentacao = millis();
 	}
 	Serial.println("O Servo foi acionado...");
 }
+
 void alexaAlimentarAquario(EspalexaDevice* d){
 	if (d == nullptr) return; //this is good practice, but not required
-	Serial.println("Alexa informou o status");
-	if ( d->getValue() == 100 ){
-		Serial.println("Alexa estava desligada e agora está ligada");
+	Serial.print("Alexa informou o status");
+	Serial.print(d->getValue());
+	Serial.print(" | ");
+	Serial.println(d->getPercent());
+	if ( d->getPercent() == 100 ){
+		Serial.println("Alexa chamou alimentar peixes");
 		alimentarPeixes();
 	} 
 }
-void setuHttpServer(){
+
+void modoAutonomoChanged(EspalexaDevice* d){
+	ehParaAlimentarPorIntervaloTempo = d->getPercent() == 100;
+}
+
+ulong getProxTimeProxAlimentacao(){
+	return (intervaloAlimentacao - (millis() - ultimaAlimentacao)/1000);
+}
+
+void setupHttpServer(){
 	// Configuração das rotas da página web
+	
 	server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
+
 		String html = "<html><body>";
-		html += "<h1>Controle do Servo e Relés</h1>";
-		html += "<button onclick=\"toggleServo()\">Acionar Servo</button><br><br>";
-		html += "<button onclick=\"toggleRelay(1)\">Acionar Relé 1</button><br><br>";
-		html += "<button onclick=\"toggleRelay(2)\">Acionar Relé 2</button><br><br>";
-		html += "<script>function toggleServo(){fetch('/servo', {method: 'POST'});}"
-				"function toggleRelay(relay){fetch('/relay/' + relay, {method: 'POST'});}</script>";
+		html += "<h1>Alimentador de peixes</h1><hr />";
+		html += "<h3>Temperatura:" + String(temperatureC) + "</h3><hr />";
+		html += "<h3>Pr&oacute;xima execu&ccedil;&atilde;o:";
+		if ( ehParaAlimentarPorIntervaloTempo ){
+			uint tempo = getProxTimeProxAlimentacao(); 
+			html += Relogio::formatarDataHora(tempo);
+			html += "<button onclick=\"daf()\">Desativar Alimentação Automática</button><br><br>";
+			
+		} else {
+			html += "<h3>Pr&oacute;xima execu&ccedil;&atilde;o: &lsqb;OFF&rsqb;";
+			html += "<button onclick=\"laf()\">Ligar Alimentação Automática</button><br><br>";
+
+		}
+		html += "</h3><hr />";
+
+		html += "<button onclick=\"toggleRango()\">Alimentar peixes</button><br><br>";
+		if ( telaLigada ){
+			html += "<button onclick=\"toggleTela()\">Desativar tela</button><br><br>";
+		} else {
+			html += "<button onclick=\"toggleTela()\">Ligar tela</button><br><br>";
+		}
+		html += "<hr />";
+		html += "<h5>Ligado desde: ";
+		html += ligadoDesde;
+		html += "</h5>";
+		html += "<h5>Hora Atual: " + relogio.getDataHora() + "</h5>";
+
+		// html += "<button onclick=\"toggleRelay(1)\">Acionar Relé 1</button><br><br>";
+		// html += "<button onclick=\"toggleRelay(2)\">Acionar Relé 2</button><br><br>";
+		html += "<script>";
+		html += " function toggleRango(){fetch('/a', {method: 'POST'});}";
+		html += " function toggleTela(){fetch('/t', {method: 'POST'});}";
+		html += " function daf(){fetch('/daf', {method: 'POST'});}";
+		html += " function lad(){fetch('/laf', {method: 'POST'});}";
+
+		// html += " function toggleRelay(relay){fetch('/relay/' + relay, {method: 'POST'});}";
+				
+		html += "</script>";
+		
 		html += "</body></html>";
 
 		request->send(200, "text/html", html);
 	});
-
+	
 	// Rota para acionar o servo
-	server.on("/servo", HTTP_POST, [](AsyncWebServerRequest *request) {
+	server.on("/a", HTTP_POST, [](AsyncWebServerRequest *request) {
 		alimentarPeixes();
 		request->send(200);
 	});
-
-	// Rota para acionar os relés
-	server.on("/relay/<int>", HTTP_POST, [](AsyncWebServerRequest *request) {
-		int relay = request->pathArg(0).toInt();
-		Serial.println("O relé "+ String(relay) + " foi aceionado"); 
-		// Lógica para acionar o relé conforme a variável relay
-
+	server.on("/t", HTTP_POST, [](AsyncWebServerRequest *request) {
+		 telaLigada = !telaLigada;
 		request->send(200);
 	});
+	
+	server.on("/daf", HTTP_POST, [](AsyncWebServerRequest *request) {
+		ehParaAlimentarPorIntervaloTempo = false;
+		alexaAquaModoAuto->setValue(0);
+		request->send(200);
+	});
+	server.on("/laf", HTTP_POST, [](AsyncWebServerRequest *request) {
+		ehParaAlimentarPorIntervaloTempo = true;
+		alexaAquaModoAuto->setValue(100);
+		request->send(200);
+	});
+	
+
+	// // Rota para acionar os relés
+	// server.on("/relay/<int>", HTTP_POST, [](AsyncWebServerRequest *request) {
+	// 	int relay = request->pathArg(0).toInt();
+	// 	Serial.println("O relé "+ String(relay) + " foi aceionado"); 
+	// 	// Lógica para acionar o relé conforme a variável relay
+
+	// 	request->send(200);
+	// });
+
 	server.onNotFound([](AsyncWebServerRequest *request){
 		if (!espalexa.handleAlexaApiCall(request)) //if you don't know the URI, ask espalexa whether it is an Alexa control request
 		{
@@ -145,12 +249,6 @@ void setuHttpServer(){
 		}
 	});
 }
-Card feedButton(&dashboard, BUTTON_CARD, "Alimentar");
-Card abrirButton(&dashboard, BUTTON_CARD, "Abrir");
-Card fecharButton(&dashboard, BUTTON_CARD, "Fechar");
-Card checkServoButton(&dashboard, BUTTON_CARD, "Checar Servo");
-Card piscarLedButton(&dashboard, BUTTON_CARD, "LED");
-Card temperaturaCard(&dashboard, TEMPERATURE_CARD, "Temperatura", "°C");
 
 bool estahChecandoConexoes = false;
 
@@ -215,9 +313,16 @@ void setupAlexa(){
 	
 	espalexa.setDiscoverable(true);
 
-	espalexa.addDevice("Alimentador aquário", alexaAlimentarAquario, EspalexaDeviceType::onoff); //simplest definition, default state off
+	espalexa.addDevice("Alimentador aquário [DEV]", alexaAlimentarAquario, EspalexaDeviceType::onoff); //simplest definition, default state off
 	alexaServoDevice = espalexa.getDevice(0); 
 	alexaServoDevice->setValue(0);
+
+	espalexa.addDevice("Alimentador Aquario Modo Autonomo", modoAutonomoChanged, EspalexaDeviceType::onoff); //simplest definition, default state off
+	alexaAquaModoAuto = espalexa.getDevice(1);
+	uint alexaValue = alexaAquaModoAuto->getPercent();
+	Serial.println("Leu o valor da alexa para o modo automático: ");
+	Serial.println(alexaValue);
+;	ehParaAlimentarPorIntervaloTempo = alexaValue != 100;
 	// espalexa.addDevice("Lâmpada UV", lampadaUVChanged); //simplest definition, default state off
 	// espalexa.addDevice("Resfriar aquario", firstLightChanged); //simplest definition, default state off
 	// espalexa.addDevice("Bomba de ar", bombaArChanged); //simplest definition, default state off
@@ -276,22 +381,6 @@ bool setupWifi(){
 		qtdVezesParaAlimentar = atoi(custom_qtd_vezes_alimentar.getValue());
 		
 	}
-	/*
-	WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid, password);
-  Serial.println("");
-
-  // Wait for connection
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
-  Serial.println("");
-  Serial.print("Connected to ");
-  Serial.println(ssid);
-  Serial.print("IP address: ");
-  Serial.println(WiFi.localIP());
-*/
 	return res;
 	
 }
@@ -300,92 +389,92 @@ void setupServo(){
 
 }
 void setupEspDash(){
-	feedButton.attachCallback([&](int value){
-			Serial.println("[feedButton] Button Callback Triggered: "+String((value == 1)?"true":"false"));
-			servoController->printStatus();
-			if ( value == 1 ){
-				Serial.println("Botao clicado");
-				alimentarPeixes();
-			}
-			checkServoButton.update(0);
-			feedButton.update(value);
-			abrirButton.update(0);
-			fecharButton.update(0);
-			dashboard.sendUpdates();
+	// feedButton.attachCallback([&](int value){
+	// 		Serial.println("[feedButton] Button Callback Triggered: "+String((value == 1)?"true":"false"));
+	// 		servoController->printStatus();
+	// 		if ( value == 1 ){
+	// 			Serial.println("Botao clicado");
+	// 			alimentarPeixes();
+	// 		}
+	// 		checkServoButton.update(0);
+	// 		feedButton.update(value);
+	// 		abrirButton.update(0);
+	// 		fecharButton.update(0);
+	// 		dashboard.sendUpdates();
 
-		});
+	// 	});
 
-		abrirButton.attachCallback([&](int value){
-			servoController->printStatus();
+	// 	abrirButton.attachCallback([&](int value){
+	// 		servoController->printStatus();
 			
-			led.Stop();
-			Serial.println("[abrirButton] Button Callback Triggered: "+String((value == 1)?"true":"false"));
-			if ( value == 1 ){
-				Serial.println("Botao clicado");
-				servoController->open();
-				digitalWrite(LedAlimentarPIN, 1);
-			}
-			checkServoButton.update(0);
-			feedButton.update(0);
-			abrirButton.update(value);
-			fecharButton.update(0);
-			dashboard.sendUpdates();
+	// 		led.Stop();
+	// 		Serial.println("[abrirButton] Button Callback Triggered: "+String((value == 1)?"true":"false"));
+	// 		if ( value == 1 ){
+	// 			Serial.println("Botao clicado");
+	// 			servoController->open();
+	// 			digitalWrite(LedAlimentarPIN, 1);
+	// 		}
+	// 		checkServoButton.update(0);
+	// 		feedButton.update(0);
+	// 		abrirButton.update(value);
+	// 		fecharButton.update(0);
+	// 		dashboard.sendUpdates();
 
 
-		});
+	// 	});
 
 
-		fecharButton.attachCallback([&](int value){
-			servoController->printStatus();
+	// 	fecharButton.attachCallback([&](int value){
+	// 		servoController->printStatus();
 		
 
-			led.Stop();
-			Serial.println("[fecharButton] Button Callback Triggered: "+String((value == 1)?"true":"false"));
-			if ( value == 1 ){
-				Serial.println("Botao clicado");
-				servoController->close();
-				digitalWrite(LedAlimentarPIN, 1);
+	// 		led.Stop();
+	// 		Serial.println("[fecharButton] Button Callback Triggered: "+String((value == 1)?"true":"false"));
+	// 		if ( value == 1 ){
+	// 			Serial.println("Botao clicado");
+	// 			servoController->close();
+	// 			digitalWrite(LedAlimentarPIN, 1);
 				
-			}
-			checkServoButton.update(0);
-			feedButton.update(0);
-			abrirButton.update(0);
-			fecharButton.update(value);
-			dashboard.sendUpdates();
+	// 		}
+	// 		checkServoButton.update(0);
+	// 		feedButton.update(0);
+	// 		abrirButton.update(0);
+	// 		fecharButton.update(value);
+	// 		dashboard.sendUpdates();
 
-		});
+	// 	});
 
-		checkServoButton.attachCallback([&](int value){
-			servoController->printStatus();
-			estahChecandoConexoes = false;
+		// checkServoButton.attachCallback([&](int value){
+		// 	servoController->printStatus();
+		// 	estahChecandoConexoes = false;
 
-			Serial.println("[checkServoButton] Button Callback Triggered: "+String((value == 1)?"true":"false"));
-			if ( value == 1 ){
-				led.Reset();
-				Serial.println("Botao clicado");
-				servoController->checkConnections();
-				estahChecandoConexoes = true;
-			}
-			checkServoButton.update(value);
-			feedButton.update(0);
-			abrirButton.update(0);
-			fecharButton.update(0);
-			dashboard.sendUpdates();
+		// 	Serial.println("[checkServoButton] Button Callback Triggered: "+String((value == 1)?"true":"false"));
+		// 	if ( value == 1 ){
+		// 		led.Reset();
+		// 		Serial.println("Botao clicado");
+		// 		servoController->checkConnections();
+		// 		estahChecandoConexoes = true;
+		// 	}
+		// 	checkServoButton.update(value);
+		// 	feedButton.update(0);
+		// 	abrirButton.update(0);
+		// 	fecharButton.update(0);
+		// 	dashboard.sendUpdates();
 
-		});
+		// });
 
-		piscarLedButton.attachCallback([&](int value){
-			int status = digitalRead(ledPinVerde);
-			Serial.println("[piscarLedButton] Button Callback Triggered: "+String((value == 1)?"true":"false") + " E estava = "+ String (status));
-			led.Stop();
-			if (value) {
-				led.Reset();
-			}
-			ehParaDeixarLedLigado = value;
-			piscarLedButton.update(value);
-			dashboard.sendUpdates();
+		// piscarLedButton.attachCallback([&](int value){
+		// 	int status = digitalRead(ledPinVerde);
+		// 	Serial.println("[piscarLedButton] Button Callback Triggered: "+String((value == 1)?"true":"false") + " E estava = "+ String (status));
+		// 	led.Stop();
+		// 	if (value) {
+		// 		led.Reset();
+		// 	}
+		// 	ehParaDeixarLedLigado = value;
+		// 	piscarLedButton.update(value);
+		// 	dashboard.sendUpdates();
 
-		});
+		// });
 
 }
 
@@ -421,7 +510,6 @@ void setupLeds(){
 	
 }
 
-float temperatureC = 0;
 void obterTemperatura(){
 	if(ehParaLerTemperatura){
 		ehParaLerTemperatura = false;
@@ -432,7 +520,7 @@ void obterTemperatura(){
 		Serial.print(temperatureC);
 		Serial.println(" °C");
 		temperatureC = sensors.getTempCByIndex(0);
-		temperaturaCard.update(temperatureC);
+		//temperaturaCard.update(temperatureC);
 	}
 }
 #include <Tela.h>
@@ -443,14 +531,16 @@ void setupDisplay(){
 }
 
 #include <Relogio.h>
-Relogio relogio;
+
 Ticker relogioTicker;
-bool ehParaExibirRelogio = false;
+
 void marcarParaExibirRelogioNaTela(){
 	ehParaExibirRelogio = true;
 }
 String ultimaDataHora;
-void atualizarTela(){
+
+
+void atualizarTela0(){
 
 	if ( ehParaExibirRelogio ){
 		ehParaExibirRelogio = false;
@@ -466,7 +556,77 @@ void atualizarTela(){
 	tela.display->println(WiFi.localIP());
 	tela.mostrar();
 }
+
+
+uint infoTime = 0;
+uint pagina = 0;
+byte totPagina = 3;
+
+
+void atualizarTela(){
+	
+	tela.setLigada(telaLigada);
+	// if ( telaLigada ){
+	// 	if ( horaAtual.Hour > 1 && horaAtual.Hour < 5 ){
+	// 		tela.clearDisplay();
+	// 		telaLigada = false;
+	// 		return;
+	// 	} else {
+	// 		telaLigada = true;
+	// 	}
+	// }
+	if ( ! ehParaExibirRelogio ){
+		return;
+	}
+	ehParaExibirRelogio = false;
+	tela.clearDisplay();
+
+	tmElements_t horaAtual = relogio.getTime();
+
+		// if ( horaAtual.hour > 2 && horaAtual.hour < 5 ){
+		// 	tela.clearDisplay();
+		// 	telaLigada = false;
+		// }
+	ultimaDataHora = relogio.getDataHora();
+	infoTime++;
+	if ( infoTime > 3){
+		infoTime = 0;
+		pagina++;
+		if ( pagina > totPagina ) {
+			pagina = 0;
+		}
+	}
+		
+	
+	tela.println(ultimaDataHora);
+	tela.linha();
+	switch (pagina)
+	{
+		default:
+		case 0: {
+			uint tempo = ehParaAlimentarPorIntervaloTempo ? getProxTimeProxAlimentacao(): intervaloAlimentacao;
+			tela.println("PROX: " + Relogio::formatarDataHora(tempo));
+			break;
+		}	
+		case 1: {
+			tela.print("Modo: ");
+			tela.println(ehParaAlimentarPorIntervaloTempo ? " [Auto]": " [OFF]");
+			break;
+		}	
+		
+	}
+	
+	tela.linha();
+	tela.print("IP: ");
+	tela.display->println(WiFi.localIP());
+	tela.linha();
+	if ( servoController->isMoving() ){
+		tela.println("... Alimentando ...");
+	}
+	tela.mostrar();
+}
 ushort tempoAtualizarRelogio = 1;
+
 void setupRelogio(){
 	relogio.setup();
 	relogio.updateTime();
@@ -474,6 +634,8 @@ void setupRelogio(){
 	if (tela.isOnline()){
 		relogioTicker.attach(min(tempoLeituraTemperatura, tempoAtualizarRelogio), marcarParaExibirRelogioNaTela);
 	}
+	ligadoDesde = relogio.getDataHora();
+
 }
 
 
@@ -496,19 +658,23 @@ void setup() {
 
     if ( setupWifi() ){	
 		DEBUG_PROGRAM_PRINTLN("Load HTTP SERVER...");
-		setuHttpServer();
-
+		setupHttpServer();
 		
 		DEBUG_PROGRAM_PRINTLN("Load Relogio...");
 		setupRelogio();
 		
 		DEBUG_PROGRAM_PRINTLN("Load Servo...");
 		setupServo();
+
+		DEBUG_PROGRAM_PRINTLN("Setup triggers...");
+		setupAlimentarTicker();
+
 		DEBUG_PROGRAM_PRINTLN("Load Alexa...");
-	
 		setupAlexa();
-		DEBUG_PROGRAM_PRINTLN("Load EspDash...");
-		setupEspDash();
+		//DEBUG_PROGRAM_PRINTLN("Load EspDash...");
+		//setupEspDash();
+
+
 		DEBUG_PROGRAM_PRINTLN(":::::::: ESP Pronto :::::::: "); 
 	} else {
 		DEBUG_PROGRAM_PRINTLN(":::::::: ESP SEM RECURSO WIFI :::::::: "); 

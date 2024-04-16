@@ -16,9 +16,17 @@ class Tela {
     // Declaration for an SSD1306 display connected to I2C (SDA, SCL pins)
     const int OLED_RESET = -1; // Reset pin # (or -1 if sharing Arduino reset pin)
 //    ADDRESS = 0x3c;
-	bool online =false;
+	bool online = false;
+	bool _estahLigada = true;
   public: 
     Adafruit_SSD1306* display;
+	void setLigada(bool novoValor){
+		this->_estahLigada = novoValor;
+		if ( ! novoValor ){
+			display->clearDisplay();
+			display->display();
+		}
+	}
     bool setup(){
       display = new Adafruit_SSD1306(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
     //  i2c.setup(0, SDA, SCL, i2c.SLOW)
@@ -56,29 +64,49 @@ class Tela {
 	bool isOnline(){
 		return online;
 	}
+	bool estahLigada(){
+		return _estahLigada;
+	}
 	void clearDisplay(){
 		display->clearDisplay();
+		
 	}
 	void mostrar(){
-		 display->setTextSize(1);
+		if ( ! estahLigada() ){
+			return;
+		}
+
+		display->setTextSize(1);
         display->setTextColor(WHITE);
         display->setCursor(0,3);
 		display->display();
 	}
 	void linha(){
+		if ( ! estahLigada() ){
+			return;
+		}
 		display->drawFastHLine(0, display->getCursorY(), display->width(), WHITE);
 		display->println();
 		
 	}
 	void print(String msg){
+		if ( ! estahLigada() ){
+			return;
+		}
 		display->print(msg);
 	}
 	void println(String msg){
+		if ( ! estahLigada() ){
+			return;
+		}
 		display->println(msg);
 	}
 	void show(String msg){
 		// Clear the buffer.
         display->clearDisplay();
+		if ( ! estahLigada() ){
+			return;
+		}
 		//display->setRotation(180);
         display->setTextSize(1);
         display->setTextColor(WHITE);
