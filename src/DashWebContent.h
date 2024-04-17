@@ -38,20 +38,20 @@ const char HTML_INDEX_CODE[] PROGMEM = R"rawliteral(
 
 		<button onclick="openSettingsModal();" class="material-icons settings-icon" id="settings-icon">settings</button>
 		<!-- Modal de Configurações -->
-		<div id="settings-modal" class="modal">
-			<div class="modal-content">
-				<span class="close-button">&times;</span>
-				<h2>Configurações</h2>
-				<div class="card">
-					<h3>Tela</h3>
-					<span class="material-icons toggle-icon" id="screen-toggle-icon">toggle_off</span>
-				</div>
-				<div class="card">
-					<h3>Alimentação Automática</h3>
-					<span class="material-icons toggle-icon" id="auto-feed-toggle-icon">toggle_off</span>
-				</div>
-			</div>
-		</div>
+<div id="settings-modal" class="modal">
+  <div class="modal-content">
+    <span class="close-button">&times;</span>
+    <h2>Configurações</h2>
+    <div class="card">
+      <h3>Tela</h3>
+      <span class="material-icons toggle-icon" id="screen-toggle-icon">toggle_off</span>
+    </div>
+    <div class="card">
+      <h3>Alimentação Automática</h3>
+      <span class="material-icons toggle-icon" id="auto-feed-toggle-icon">toggle_off</span>
+    </div>
+  </div>
+</div>
 		<footer>
 		<div class="version-info">Versão do App: <span class"version-value" id="version-value">1.0.0</span></div>
 			<div class="activity-time" id="activity-time">Tempo de Atividade: --:--:--</div>
@@ -134,6 +134,21 @@ footer {
 	margin-top: 20px;
 }
 
+
+
+.card {
+  display: flex; /* Define o layout flexível para os itens dentro do card */
+  align-items: center; /* Centraliza os itens verticalmente */
+  justify-content: space-between; /* Distribui o espaço entre os itens */
+  padding: 10px; /* Espaçamento interno do card */
+}
+
+.toggle-icon {
+  font-size: 50px; /* Tamanho do ícone de toggle */
+  cursor: pointer; /* Muda o cursor para indicar que é clicável */
+}
+
+
 /* Estilo da Modal */
 .modal {
   display: none; /* Modal escondida por padrão */
@@ -154,7 +169,7 @@ footer {
   margin: 15% auto; /* 15% do topo e centralizado horizontalmente */
   padding: 20px;
   border: 1px solid #888;
-  width: 80%; /* Largura da modal */
+  width: 50%; /* Largura da modal */
 }
 
 /* Botão de fechar */
@@ -227,16 +242,16 @@ function updateInterfaceWithConfig(config) {
 	var autoFeedToggleIcon = document.getElementById("auto-feed-toggle-icon");
 	if ( autoFeedToggleIcon ){
 		autoFeedToggleIcon.textContent =
-		config.AUTO === "1" ? "toggle_on" : "toggle_off";
-		autoFeedToggleIcon.classList.toggle("on", config.AUTO === "1");
-		autoFeedToggleIcon.classList.toggle("off", config.AUTO === "0");
+		config.AutoFeed === "1" ? "toggle_on" : "toggle_off";
+		autoFeedToggleIcon.classList.toggle("on", config.AutoFeed === "1");
+		autoFeedToggleIcon.classList.toggle("off", config.AutoFeed === "0");
 	}
-	var activationTime = new Date(config.AT.replace( /(\d{2})[-/](\d{2})[-/](\d{4})/, "$2/$1/$3") );
+	var activationTime = new Date(config.LigadoDesde.replace( /(\d{2})[-/](\d{2})[-/](\d{4})/, "$2/$1/$3") );
 	// Atualiza o tempo de atividade e o horário da próxima alimentação
 	document.getElementById("activity-time").textContent =
-		"Tempo de Atividade: " + config.AT;
+		"Tempo de Atividade: " + config.LigadoDesde;
 	document.getElementById("next-feed-timer").textContent =
-	"Próxima Alimentação: " + config.NextFeedAt;
+	"Próxima Alimentação: " + config.NextFeedAt + " | " + config.NextFeedTimeOut;
 	document.getElementById("version-value").textContent = config.Version;
 
 	var currentTime = new Date(); // Data e hora atuais

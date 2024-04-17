@@ -46,7 +46,7 @@ int qtdVezesParaAlimentar = 2;
 
 
 bool ehParaAlimentarPorIntervaloTempo = true;
-ushort intervaloAlimentacao = 60* 60 * 4 ; // 6 hr em segundos = 6 * 60 * 60  
+ushort intervaloAlimentacao = 60* 60 * 4 ; // 4 hr em segundos = 6 * 60 * 60  
 ulong ultimaAlimentacao = 0;
 
 #include <ServoController.h>
@@ -170,6 +170,9 @@ ulong getProxTimeProxAlimentacao(){
 
 void setupHttpServer(){
 	// Configuração das rotas da página web
+	server.on("/index.html", HTTP_GET,  [](AsyncWebServerRequest *request) {
+		request->send_P(200, "text/html", HTML_INDEX_CODE);
+	});
 	server.on("/", HTTP_GET,  [](AsyncWebServerRequest *request) {
 		request->send_P(200, "text/html", HTML_INDEX_CODE);
 	});
@@ -185,14 +188,13 @@ void setupHttpServer(){
 		JsonDocument doc;
 		JsonObject root = doc.to<JsonObject>();
 		// {AUTO=0, TELA=1, AT="15/04/2024 13:01:50", PA="15/04/2024 18:01:50"} 
-		root["AUTO"] = ehParaAlimentarPorIntervaloTempo ? "1" :"0";
+		root["AutoFeed"] = ehParaAlimentarPorIntervaloTempo ? "1" :"0";
 		root["TELA"] = telaLigada ? "1" :"0";
 		uint tempo = getProxTimeProxAlimentacao();
-		root["NextFeedTimeOut"] = Relogio::formatarDataHora(relogio.getTimeNow() + tempo);
-		root["PA"] = Relogio::formatarDataHora((millis() - ultimaAlimentacao)/1000);
+		root["NextFeedTimeOut"] = Relogio::formatarDataHora(relogio.getTimeNow()/1000 + tempo);
 		root["NextFeedAt"] = Relogio::formatarDataHora(intervaloAlimentacao + ultimaAlimentacao);
-		root["AT"] = ligadoDesde;
-		root["DN"] = relogio.getDataHora();
+		root["LigadoDesde"] = ligadoDesde;
+		root["HoraDisp"] = relogio.getDataHora();
 		root["Version"] = VERSION_APP;
 		serializeJson(doc, *response);
 		request->send(response);
