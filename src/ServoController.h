@@ -1,5 +1,6 @@
 #include <Servo.h>
 #include <Ticker.h>
+#include <ServoInfo.h>
 
 #ifdef DEBUG_SERVOCONTROLL
 	#define DEBUG_SERVOCONTROLL_PRINTLN(x) Serial.println(x)
@@ -11,14 +12,14 @@ class ServoController {
 private:
 
 	Servo servoMotor;
-	int servoPos = 0;
-	int servoMoveCount = 0;
-	int maxServoMoveCount = 0;
+	unsigned int servoPos = 0;
+	byte servoMoveCount = 0;
+	byte maxServoMoveCount = 0;
 	unsigned int servoPin = 0;
-	int servoAnguloAberto = 0;
-	int servoAnguloFechado = 50;
-	int setupServoPosMin = 500;
-	int setupServoPosMax = 2400;
+	unsigned int servoAnguloAberto = 0;
+	unsigned int servoAnguloFechado = 50;
+	unsigned int setupServoPosMin = 500;
+	unsigned int setupServoPosMax = 2400;
 	Ticker TickerServo;
 
   	bool ehParaMovimentarServo = false;
@@ -37,9 +38,21 @@ private:
 		}
 	}
 
+	std::function<void(ServoInfo)> servoMoveCallback;
+
 protected:
+	void onServoMove(ServoInfo info){
+		if (servoMoveCallback != nullptr )
+		{
+			servoMoveCallback(info);
+		}  
+	}
 	
 public:
+	void setServoMoveCallback(std::function<void(ServoInfo)> callback){
+		servoMoveCallback = callback; 
+	}
+	
 	void printStatus(){
 		Serial.println(" servoPos: " + String(servoPos) +
 						"\n servoMoveCount: " + String(servoMoveCount) +
@@ -50,11 +63,16 @@ public:
 						"\n isMoving: " + String(isMoving()) +
 						"\n -- Servo OK --");
 	}
+	~ServoController(){
+		if ( servoMotor.attached() ){
+			servoMotor.detach();
+		}
+	}
 	ServoController(
 		unsigned int _servoPin, 
-		int maxMoveCount, 
-		int anguloPortaAberta,
-		int anguloPortaFechada
+		byte maxMoveCount, 
+		unsigned int anguloPortaAberta,
+		unsigned int anguloPortaFechada
 		)
 	{
 		servoPos = anguloPortaAberta;
@@ -108,20 +126,34 @@ public:
 			if (! ehParaMovimentarServo ){
 				return;
 			}
+			ServoInfo info;
+			info.passoAtual = 0;
+			info.passoTotal = maxServoMoveCount;
+
 			DEBUG_SERVOCONTROLL_PRINTLN("Update is moving...");
 			ehParaMovimentarServo = false;
 			if (! servoMotor.attached() ){
 				servoMotor.attach(servoPin, setupServoPosMin, setupServoPosMax);
+				info.status = StatusServo::Iniciando;
+				onServoMove(info);
 				DEBUG_SERVOCONTROLL_PRINTLN("Servo conectado");
 			}
 			
 			DEBUG_SERVOCONTROLL_PRINTLN("- Movendo servo de " + String(servoMotor.read()) + " para " + String(servoPos) + " id = " + String(servoMoveCount));
+			info.status = StatusServo::Alimentando;
+			info.passoAtual = servoMoveCount;
+			onServoMove(info);
 			servoMotor.write(servoPos);
 			if ( isMoving() ){
 				servoPos = (servoPos == servoAnguloAberto) ? servoAnguloFechado : servoAnguloAberto;
 			}
 			setServoTimer(isMoving(), 1.5);
 			servoMoveCount++;
+			if ( servoMoveCount == maxServoMoveCount){
+				info.status = StatusServo::Finalizado;
+				info.passoAtual = servoMoveCount;
+				onServoMove(info);
+			}
 		}
 	}
 };
