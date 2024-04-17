@@ -58,7 +58,7 @@ Desenvolvido para ser integrado com o [modelo do alimentador][1] impresso atrav�
 
 ## Sugestão de Cases para Impressão
 
-Veja a [página dedicada](modelos_stl.md) com os modelos de arquivos para a impressão.
+Veja a [página dedicada](docs/modelos_stl.md) com os modelos de arquivos para a impressão.
 
 
 ## Agradecimentos
@@ -79,7 +79,8 @@ Veja a [página dedicada](modelos_stl.md) com os modelos de arquivos para a impr
 - [Automatic fish Tank Feeder](https://www.printables.com/model/582823/)
 - [Automatic feeder for fish tank](https://www.printables.com/model/327334-automatic-feeder-for-fish-tank)
 - [Automatic fish feeder](https://www.printables.com/model/32334-automatic-fish-feeder)
-
+- [Automatic Fish Feeder for Flake Food](https://www.thingiverse.com/thing:6378659) 
+  - Aqui eu acredito que é uma versão otimizada do meu alimentador.
 ## Projetos legais
 
 - [Proteção para que o peixe não pule](https://www.thingiverse.com/thing:6583076)

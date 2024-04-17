@@ -10,14 +10,6 @@
 
 void DEBUG_PROGRAM_PRINTLN(String x);
 
-#ifndef STASSID
-#define STASSID ""
-#define STAPSK ""
-#endif
-
-const char* ssid = STASSID;
-const char* password = STAPSK;
-
 
 #ifdef ARDUINO_ARCH_ESP32
 #include <WiFi.h>
