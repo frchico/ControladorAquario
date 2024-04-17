@@ -1,3 +1,11 @@
+#include <Arduino.h>
+
+#define VERSION_APP "1.0.0.0"
+
+#include "DashWebContent.h"
+#include "AsyncJson.h"
+#include "ArduinoJson.h"
+
 #include <Servo.h>
 
 void DEBUG_PROGRAM_PRINTLN(String x);
@@ -162,8 +170,58 @@ ulong getProxTimeProxAlimentacao(){
 
 void setupHttpServer(){
 	// Configuração das rotas da página web
+	server.on("/", HTTP_GET,  [](AsyncWebServerRequest *request) {
+		request->send_P(200, "text/html", HTML_INDEX_CODE);
+	});
+	server.on("/js.js", HTTP_GET,  [](AsyncWebServerRequest *request) {
+		request->send_P(200, "text/javascript", JS_CODE);
+	});
+	server.on("/css.css", HTTP_GET,  [](AsyncWebServerRequest *request) {
+		request->send_P(200, "text/css", CSS_CODE);
+	});
+
+	server.on("/conf", HTTP_GET,  [](AsyncWebServerRequest *request) {
+		AsyncResponseStream *response = request->beginResponseStream("application/json");
+		JsonDocument doc;
+		JsonObject root = doc.to<JsonObject>();
+		// {AUTO=0, TELA=1, AT="15/04/2024 13:01:50", PA="15/04/2024 18:01:50"} 
+		root["AUTO"] = ehParaAlimentarPorIntervaloTempo ? "1" :"0";
+		root["TELA"] = telaLigada ? "1" :"0";
+		uint tempo = getProxTimeProxAlimentacao();
+		root["NextFeedTimeOut"] = Relogio::formatarDataHora(relogio.getTimeNow() + tempo);
+		root["PA"] = Relogio::formatarDataHora((millis() - ultimaAlimentacao)/1000);
+		root["NextFeedAt"] = Relogio::formatarDataHora(intervaloAlimentacao + ultimaAlimentacao);
+		root["AT"] = ligadoDesde;
+		root["DN"] = relogio.getDataHora();
+		root["Version"] = VERSION_APP;
+		serializeJson(doc, *response);
+		request->send(response);
+	});
+
+	server.on("/tON", HTTP_POST, [](AsyncWebServerRequest *request) {
+		telaLigada = true;
+		request->send(200, "text/plain", "1");
+	});
+	server.on("/tOFF", HTTP_POST, [](AsyncWebServerRequest *request) {
+		telaLigada = false;
+		request->send(200, "text/plain", "0");
+	});
+
+	server.on("/aON", HTTP_POST, [](AsyncWebServerRequest *request) {
+		ehParaAlimentarPorIntervaloTempo = true;
+		alexaAquaModoAuto->setValue(100);
+		request->send(200, "text/plain", "1");
+	});
+	server.on("/aOFF", HTTP_POST, [](AsyncWebServerRequest *request) {
+		ehParaAlimentarPorIntervaloTempo = false;
+		alexaAquaModoAuto->setValue(0);
+		request->send(200, "text/plain", "0");
+	});
+
 	
-	server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
+
+
+	server.on("/index2.html", HTTP_GET, [](AsyncWebServerRequest *request) {
 
 		String html = "<html><body>";
 		html += "<h1>Alimentador de peixes</h1><hr />";

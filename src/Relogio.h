@@ -88,6 +88,9 @@ class Relogio {
 			
 		}
 		
+		ulong getTimeNow() {
+			return timezone.ms();
+		}
 		/**
 		 * Retorna um "DataTime" style. Ver https://github.com/ropg/ezTime?tab=readme-ov-file#breaktime
 		*/
