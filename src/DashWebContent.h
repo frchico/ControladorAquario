@@ -14,18 +14,15 @@ const char HTML_INDEX_CODE[] PROGMEM = R"rawliteral(
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>Alimentador Automático de Peixes</title>
-		<link
-		href="https://fonts.googleapis.com/icon?family=Material+Icons"
-		rel="stylesheet"
-		/>
+		<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" />
+		<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"/>
 		<link rel="stylesheet" href="/css.css" />
 	</head>
 	<body>
 		<header>Alimentador de peixes</header>
 
 		<div class="content">
-			<span class="material-symbols-outlined">calendar_clock</span>
-			Próxima Alimentação em: <div class="next-feed-timer" id="next-feed-timer"> --:--:--</div>
+			<span class="material-symbols-outlined">schedule</span><span class="next-feed-timer" id="next-feed-timer"> --:--:--</span>
 		</div>
 		
 		<div class="content">
@@ -63,6 +60,29 @@ const char HTML_INDEX_CODE[] PROGMEM = R"rawliteral(
 
 )rawliteral";
 
+const char ERROR_PAGE_CODE[] PROGMEM = R"rawliteral( 
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Página Não Encontrada</title>
+<link rel="stylesheet" href="css.css">
+</head>
+<body>
+
+<div class="error-page">
+  <h1>404</h1>
+  <p>Página Não Encontrada</p>
+  <p>Desculpe, a página que você está procurando não existe ou foi removida.</p>
+  <!-- Botão atualizado para redirecionar para a raiz do site -->
+  <a href="/" class="button">Voltar para a Página Inicial</a>
+</div>
+
+</body>
+</html>
+
+)rawliteral";
 
 const char CSS_CODE[] PROGMEM = R"rawliteral( 
 body {
@@ -135,7 +155,6 @@ footer {
 }
 
 
-
 .card {
   display: flex; /* Define o layout flexível para os itens dentro do card */
   align-items: center; /* Centraliza os itens verticalmente */
@@ -186,6 +205,32 @@ footer {
   text-decoration: none;
   cursor: pointer;
 }
+
+.error-page {
+  text-align: center;
+  padding-top: 50px;
+}
+
+.error-page h1 {
+  font-size: 150px;
+  margin-bottom: 20px;
+}
+
+.error-page p {
+  font-size: 20px;
+  margin-bottom: 20px;
+}
+
+.error-page button {
+  font-size: 18px;
+  padding: 10px 20px;
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
 
 
 )rawliteral";
@@ -295,7 +340,7 @@ function updateInterfaceWithConfig(config) {
 	fetchConfigAndUpdateInterface();
 
 	// Consultar o dispositivo a cada minuto
-	setInterval(fetchConfigAndUpdateInterface, 60000);
+	setInterval(fetchConfigAndUpdateInterface, 50000);
 
 
 		

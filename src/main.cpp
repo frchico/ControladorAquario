@@ -222,90 +222,18 @@ void setupHttpServer(){
 
 	
 
-
-	server.on("/index2.html", HTTP_GET, [](AsyncWebServerRequest *request) {
-
-		String html = "<html><body>";
-		html += "<h1>Alimentador de peixes</h1><hr />";
-		html += "<h3>Temperatura:" + String(temperatureC) + "</h3><hr />";
-		html += "<h3>Pr&oacute;xima execu&ccedil;&atilde;o:";
-		if ( ehParaAlimentarPorIntervaloTempo ){
-			uint tempo = getProxTimeProxAlimentacao(); 
-			html += Relogio::formatarDataHora(tempo);
-			html += "<button onclick=\"daf()\">Desativar Alimentação Automática</button><br><br>";
-			
-		} else {
-			html += "<h3>Pr&oacute;xima execu&ccedil;&atilde;o: &lsqb;OFF&rsqb;";
-			html += "<button onclick=\"laf()\">Ligar Alimentação Automática</button><br><br>";
-
-		}
-		html += "</h3><hr />";
-
-		html += "<button onclick=\"toggleRango()\">Alimentar peixes</button><br><br>";
-		if ( telaLigada ){
-			html += "<button onclick=\"toggleTela()\">Desativar tela</button><br><br>";
-		} else {
-			html += "<button onclick=\"toggleTela()\">Ligar tela</button><br><br>";
-		}
-		html += "<hr />";
-		html += "<h5>Ligado desde: ";
-		html += ligadoDesde;
-		html += "</h5>";
-		html += "<h5>Hora Atual: " + relogio.getDataHora() + "</h5>";
-
-		// html += "<button onclick=\"toggleRelay(1)\">Acionar Relé 1</button><br><br>";
-		// html += "<button onclick=\"toggleRelay(2)\">Acionar Relé 2</button><br><br>";
-		html += "<script>";
-		html += " function toggleRango(){fetch('/a', {method: 'POST'});}";
-		html += " function toggleTela(){fetch('/t', {method: 'POST'});}";
-		html += " function daf(){fetch('/daf', {method: 'POST'});}";
-		html += " function lad(){fetch('/laf', {method: 'POST'});}";
-
-		// html += " function toggleRelay(relay){fetch('/relay/' + relay, {method: 'POST'});}";
-				
-		html += "</script>";
-		
-		html += "</body></html>";
-
-		request->send(200, "text/html", html);
-	});
 	
 	// Rota para acionar o servo
 	server.on("/a", HTTP_POST, [](AsyncWebServerRequest *request) {
 		alimentarPeixes();
 		request->send(200);
 	});
-	server.on("/t", HTTP_POST, [](AsyncWebServerRequest *request) {
-		 telaLigada = !telaLigada;
-		request->send(200);
-	});
 	
-	server.on("/daf", HTTP_POST, [](AsyncWebServerRequest *request) {
-		ehParaAlimentarPorIntervaloTempo = false;
-		alexaAquaModoAuto->setValue(0);
-		request->send(200);
-	});
-	server.on("/laf", HTTP_POST, [](AsyncWebServerRequest *request) {
-		ehParaAlimentarPorIntervaloTempo = true;
-		alexaAquaModoAuto->setValue(100);
-		request->send(200);
-	});
-	
-
-	// // Rota para acionar os relés
-	// server.on("/relay/<int>", HTTP_POST, [](AsyncWebServerRequest *request) {
-	// 	int relay = request->pathArg(0).toInt();
-	// 	Serial.println("O relé "+ String(relay) + " foi aceionado"); 
-	// 	// Lógica para acionar o relé conforme a variável relay
-
-	// 	request->send(200);
-	// });
 
 	server.onNotFound([](AsyncWebServerRequest *request){
 		if (!espalexa.handleAlexaApiCall(request)) //if you don't know the URI, ask espalexa whether it is an Alexa control request
 		{
-			//whatever you want to do with 404s
-			request->send(404, "text/plain", "Not found");
+			request->send_P(404, "text/html", ERROR_PAGE_CODE);
 		}
 	});
 }
